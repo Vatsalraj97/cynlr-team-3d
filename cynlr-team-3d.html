@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CynLr Team — 3D Viz</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#030814;color:#e2e8f0;font-family:'Segoe UI',sans-serif;overflow:hidden}
+canvas{display:block}
+#ui{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:10px 18px;background:rgba(3,8,20,0.85);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,0.06);z-index:10}
+#ui h1{font-size:14px;font-weight:600;letter-spacing:0.05em;color:#7dd3fc;white-space:nowrap}
+.tab{padding:5px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:#94a3b8;font-size:12px;cursor:pointer;transition:all 0.2s}
+.tab.active{background:rgba(125,211,252,0.15);border-color:#7dd3fc;color:#7dd3fc}
+.tab:hover:not(.active){background:rgba(255,255,255,0.06);color:#e2e8f0}
+#legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;color:#64748b;margin-left:auto}
+#legend span{display:flex;align-items:center;gap:4px}
+#legend b{display:inline-block;width:8px;height:8px;border-radius:1px}
+#tooltip{position:fixed;pointer-events:none;background:rgba(3,8,20,0.92);border:1px solid rgba(125,211,252,0.3);border-radius:8px;padding:10px 14px;font-size:12px;line-height:1.6;max-width:240px;display:none;z-index:20;backdrop-filter:blur(6px)}
+#tooltip .tt-name{font-size:13px;font-weight:600;color:#7dd3fc;margin-bottom:4px}
+#tooltip .tt-level{color:#a78bfa;font-size:11px}
+#tooltip .tt-exp{color:#94a3b8;font-size:11px}
+#tooltip .tt-projs{color:#e2e8f0;font-size:11px;margin-top:4px}
+#hint{position:fixed;bottom:14px;right:14px;font-size:11px;color:#334155;pointer-events:none}
+
+/* ── Stack mode toggle ── */
+#mode-toggle{display:none;align-items:center;gap:8px;margin-left:8px;padding-left:12px;border-left:1px solid rgba(255,255,255,0.08)}
+#mode-toggle span{font-size:11px;color:#475569;white-space:nowrap}
+#mode-toggle span.active-label{color:#7dd3fc}
+.tgl-wrap{position:relative;width:36px;height:18px;cursor:pointer}
+.tgl-wrap input{opacity:0;width:0;height:0;position:absolute}
+.tgl-track{position:absolute;inset:0;background:rgba(255,255,255,0.08);border-radius:9px;transition:background 0.2s}
+.tgl-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#475569;border-radius:50%;transition:transform 0.2s,background 0.2s}
+.tgl-wrap input:checked ~ .tgl-track{background:rgba(125,211,252,0.25)}
+.tgl-wrap input:checked ~ .tgl-thumb{transform:translateX(18px);background:#7dd3fc}
+
+/* ── Project detail panel ── */
+#project-panel{position:fixed;top:50px;right:-360px;width:330px;max-height:calc(100vh - 60px);background:rgba(3,8,20,0.96);border:1px solid rgba(255,255,255,0.08);border-right:none;border-radius:12px 0 0 12px;overflow-y:auto;transition:right 0.38s cubic-bezier(0.25,0.46,0.45,0.94);z-index:15;backdrop-filter:blur(14px)}
+#project-panel.open{right:0}
+#project-panel::-webkit-scrollbar{width:4px}
+#project-panel::-webkit-scrollbar-track{background:transparent}
+#project-panel::-webkit-scrollbar-thumb{background:rgba(125,211,252,0.2);border-radius:2px}
+.pp-header{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.pp-proj-name{font-size:20px;font-weight:700;color:#f1f5f9;line-height:1.2}
+.pp-type-badge{font-size:10px;font-weight:600;letter-spacing:0.08em;border:1px solid;border-radius:4px;padding:2px 7px;display:inline-block;margin-top:5px}
+.pp-close{background:none;border:none;color:#475569;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;transition:color 0.15s}
+.pp-close:hover{color:#e2e8f0}
+.pp-fte{padding:10px 16px;font-size:13px;color:#64748b;border-bottom:1px solid rgba(255,255,255,0.05)}
+.pp-fte strong{color:#7dd3fc;font-weight:600}
+.pp-section-title{padding:10px 16px 4px;font-size:10px;letter-spacing:0.1em;color:#334155;font-weight:600}
+.pp-member{display:flex;align-items:center;gap:10px;padding:7px 16px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.pp-member:hover{background:rgba(255,255,255,0.03)}
+.pp-member-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pp-member-info{flex:1;min-width:0}
+.pp-member-name{font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-member-level{font-size:10px;margin-top:1px}
+.pp-alloc{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.pp-bar{width:60px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}
+.pp-bar-fill{height:100%;border-radius:2px;transition:width 0.6s ease}
+.pp-pct{font-size:11px;color:#64748b;width:30px;text-align:right}
+.pp-skills{display:flex;flex-wrap:wrap;gap:5px;padding:6px 16px 14px}
+.pp-skill{font-size:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:2px 8px;color:#94a3b8}
+
+/* ── Person panel (left) ── */
+#person-panel{position:fixed;top:50px;left:-340px;width:300px;max-height:calc(100vh - 60px);background:rgba(3,8,20,0.96);border:1px solid rgba(255,255,255,0.08);border-left:none;border-radius:0 12px 12px 0;overflow-y:auto;transition:left 0.38s cubic-bezier(0.25,0.46,0.45,0.94);z-index:15;backdrop-filter:blur(14px)}
+#person-panel.open{left:0}
+#person-panel::-webkit-scrollbar{width:4px}
+#person-panel::-webkit-scrollbar-track{background:transparent}
+#person-panel::-webkit-scrollbar-thumb{background:rgba(125,211,252,0.2);border-radius:2px}
+.perp-header{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.perp-name{font-size:16px;font-weight:700;color:#f1f5f9;line-height:1.3}
+.perp-level{font-size:11px;margin-top:3px;font-weight:600}
+.perp-tenure{font-size:11px;color:#475569;margin-top:2px}
+.perp-proj{display:flex;align-items:center;gap:9px;padding:7px 16px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.perp-proj:hover{background:rgba(255,255,255,0.03);cursor:pointer}
+.perp-proj-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.perp-proj-name{flex:1;font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.perp-proj-col{font-size:9px;color:#334155;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>CynLr Engineering Team</h1>
+  <button class="tab active" id="btn-people" onclick="switchView('people')">People Grid</button>
+  <button class="tab" id="btn-projects" onclick="switchView('projects')">Project Towers</button>
+  <button class="tab" id="btn-hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
+  <button class="tab" id="btn-flow" onclick="switchView('flow')">Process Flow</button>
+  <button class="tab" id="btn-radar" onclick="switchView('radar')">Distribution</button>
+  <div id="mode-toggle">
+    <span id="lbl-contribution" class="active-label">Contribution</span>
+    <label class="tgl-wrap">
+      <input type="checkbox" id="tgl-input" onchange="toggleStackMode(this.checked)">
+      <div class="tgl-track"></div>
+      <div class="tgl-thumb"></div>
+    </label>
+    <span id="lbl-dedication">Dedication</span>
+  </div>
+  <div id="legend">
+    <span><b style="background:#fbbf24"></b>Intern</span>
+    <span><b style="background:#60a5fa"></b>Eng 1-3</span>
+    <span><b style="background:#4ade80"></b>Lead</span>
+    <span><b style="background:#f97316"></b>Senior</span>
+    <span><b style="background:#e879f9"></b>Principal</span>
+    <span style="margin-left:6px;color:#475569">Height = exp · Layers = CynLr yrs</span>
+  </div>
+</div>
+<div id="tooltip"></div>
+<div id="person-panel"></div>
+<div id="project-panel"></div>
+<div id="hint">Drag to orbit · Scroll to zoom · Hover to inspect · Click tower to inspect</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const PEOPLE = [
+  {"name":"Aashlesh Anilkumar Pardhi","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CLX":50,"Research/Exploration - HW":25,"Product Packaging":25},"skills":["CAD","Mech Design"]},
+  {"name":"Adithi Shetty N","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CLX":50,"Lam Research (QC Cup Assembly)":50},"skills":["PCB Design","Motion Control","HW Com Interface","HW Testing"]},
+  {"name":"A Kathir","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Audi(Door Assembly)":80,"SW Tools":20},"skills":["ML, DL","Vision"]},
+  {"name":"Ananthu V","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CyRo":100},"skills":["HW Com Interface","Python"]},
+  {"name":"Aryan Mathure","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CyRo":30,"Lam Research (QC Cup Assembly)":70},"skills":["Sensor Testing","Application Development"]},
+  {"name":"Darshan M","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Lam Research (QC Cup Assembly)":50,"Gripper":50},"skills":["LabVIEW","FPGA","HW Testing","Electronics & Embedded"]},
+  {"name":"Dhayadharsh S M","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CLX":90,"HW Tools":10},"skills":["Electronics & Embedded","Motion Control"]},
+  {"name":"G Pranav","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Audi(Door Assembly)":20,"SW Tools":70,"Neuroscience, Vision Research IISC":10},"skills":["ML, RL","Algo Experiments"]},
+  {"name":"HARISANKAR A G","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{},"skills":["Robot Systems"]},
+  {"name":"HIMANSHU RAI","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CLX":40,"HW Tools":60},"skills":["EM Design"]},
+  {"name":"Kavin Prakash M","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{},"skills":["LabVIEW","Application Development","Electronics & Embedded","Sensor Design"]},
+  {"name":"Mrithika Basker","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"SW Tools":100},"skills":["C++","Robot Interfaces","LabVIEW"]},
+  {"name":"Rishab Bohra","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"AMAT -1 (Kitting)":20,"SW Tools":10,"Neuroscience, Vision Research IISC":70},"skills":["ML, RL","Vision","LabVIEW","Python","C++"]},
+  {"name":"Shalank N Kulkarni","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CyRo":25,"CyNoid":50,"Product Packaging":25},"skills":["CAD","Mech Design"]},
+  {"name":"Sharif S","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{},"skills":["Robot Systems"]},
+  {"name":"Sri Abhishek Kulkarni","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Audi(Door Assembly)":10,"AMAT -1 (Kitting)":30,"Neuroscience, Vision Research IISC":60},"skills":["Vision","LabVIEW","Electronics"]},
+  {"name":"Vivaan Vipin Jain","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"CLX":10,"SW Tools":40,"Gripper":50},"skills":["Electronics","LabVIEW","HW Testing","HW Com Interface"]},
+  {"name":"Krishnapranav Balasubramanian","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{},"skills":["Simulations"]},
+  {"name":"K Vinoth Kumar","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Research/Exploration - HW":10},"skills":["Simulations"]},
+  {"name":"A Y Ellakiya","cynlr":0.6,"exp":0.6,"level":"Intern","allocs":{"Documentation":100},"skills":["Documentation"]},
+  {"name":"Ajayprabhakar Kavungal","cynlr":5.0,"exp":9.0,"level":"Lead","allocs":{},"skills":[]},
+  {"name":"Asmita Rajesh Pai","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{},"skills":["LabVIEW","Robotics Systems","Application Development"]},
+  {"name":"Bharath Jain","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"HW Tools":25,"Gripper":25,"Product Packaging":50},"skills":["Mech Design","CAD","Manufacturability","Product Design"]},
+  {"name":"Chethan K","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"CLX":15,"CyRo":10,"CyNoid":40,"Research/Exploration - HW":15,"Gripper":10,"Hiring":10},"skills":["Electrical","Motion Control","LabVIEW","Vendor management","Project Management"]},
+  {"name":"Deepti Bhat","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"CyNoid":60,"SW Tools":10,"Code Refactoring":20,"Hiring":10},"skills":["C++","LabVIEW","Application Development"]},
+  {"name":"Edwin Justin","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"CyRo":25,"CyNoid":50,"Audi(Door Assembly)":25},"skills":["Mech Design","CAD","Simulation"]},
+  {"name":"Gagan Goutham N","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"CyNoid":10,"AMAT -1 (Kitting)":10,"Neuroscience, Vision Research IISC":80},"skills":["Image Processing","ML, DL","LabVIEW","Vision","Algo Experiments"]},
+  {"name":"Goutham K","cynlr":0.3,"exp":1.5,"level":"Engineer 1","allocs":{"CLX":75,"HW Tools":25},"skills":["CAD","Manufacturability","Mech Design","Product Design"]},
+  {"name":"Gurubaran Elango","cynlr":5.5,"exp":8.0,"level":"Lead","allocs":{},"skills":[]},
+  {"name":"Javeed Ahmad","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"Lam Research (QC Cup Assembly)":60,"AMAT -1 (Kitting)":40},"skills":["LabVIEW","Vision","Electronics Design","Algo Experiments"]},
+  {"name":"Kishika Singh","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"Audi(Door Assembly)":80,"Demo Development":20},"skills":["LabVIEW","Machine vision","Calibration","Vision"]},
+  {"name":"Lakshith Kodihalli Shashikumar","cynlr":3.5,"exp":3.5,"level":"Engineer 2","allocs":{"CyRo":25,"CyNoid":50,"Hiring":25},"skills":["Mech Design","CAD","Product Design","Manufacturability","Product Dev Lifecycle","Vendor Management"]},
+  {"name":"Maha Zakir Khan","cynlr":0.6,"exp":2.0,"level":"Engineer 2","allocs":{},"skills":[]},
+  {"name":"Manvanth G S","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"SW Tools":30,"Code Refactoring":20,"DevOps":40,"Hiring":10},"skills":["C++","LabVIEW","CUDA","DevOps","Application Development"]},
+  {"name":"Mehul Amit Avalaskar","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"Audi(Door Assembly)":25,"Lam Research (QC Cup Assembly)":25,"Schneider Electric - India":25,"Demo Development":25},"skills":["Mech Design","CAD","Simulation"]},
+  {"name":"Mohit Jani","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"Audi(Door Assembly)":30,"Lam Research (QC Cup Assembly)":50,"Robotics Research":20},"skills":["Robotics","Vision","LabVIEW","Simulations","Algo Experiments"]},
+  {"name":"Mothukuri Jaswanth Venkat","cynlr":3.5,"exp":3.5,"level":"Engineer 2","allocs":{"SW Tools":30,"Demo Development":10,"Code Refactoring":20,"DevOps":30,"Hiring":10},"skills":["LabVIEW","C++","SW Integration","Application Development","Robot Interface & Communication"]},
+  {"name":"Narendhiran K S","cynlr":3.5,"exp":3.5,"level":"Engineer 2","allocs":{},"skills":["LabVIEW","Electronics & Embedded","C","Application Development","Interface & Communication"]},
+  {"name":"Prakash Pulak Ghosh","cynlr":0.6,"exp":10.0,"level":"Engineer 3","allocs":{"Lam Research (QC Cup Assembly)":80,"Schneider Electric - India":5,"Research/Exploration - HW":15},"skills":[]},
+  {"name":"Pranav J Nair","cynlr":3.5,"exp":3.5,"level":"Engineer 2","allocs":{},"skills":["LabVIEW","Robotics Systems","Application Development","Interface & Communication"]},
+  {"name":"Sanjith Sudhakar","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{"Audi(Door Assembly)":100},"skills":["LabVIEW","Vision","Application Development","ML, DL Implementation","Algo Experiments"]},
+  {"name":"Sankarshan D H","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"Lam Research (QC Cup Assembly)":50,"Neuroscience, Vision Research IISC":50},"skills":["LabVIEW","Electronics Design","FPGA","Vision"]},
+  {"name":"Satwik Agarwal","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"CLX":30,"SW Tools":20,"Demo Development":20,"Code Refactoring":20,"Hiring":10},"skills":["C++","LabVIEW","Robot Interface & Communication","SW Integration"]},
+  {"name":"Sravan R","cynlr":1.5,"exp":1.5,"level":"Engineer 1","allocs":{"CLX":25,"CyRo":25,"CyNoid":50},"skills":["Electrical"]},
+  {"name":"Varikoti Siva Sai Dhanush","cynlr":2.5,"exp":2.5,"level":"Engineer 2","allocs":{},"skills":["LabVIEW","Electronics & Embedded","Application Development"]},
+  {"name":"Yuvaraj Pandurang Badiger","cynlr":3.5,"exp":3.5,"level":"Engineer 3","allocs":{"Research/Exploration - HW":25,"Neuroscience, Vision Research IISC":10,"Hiring":65},"skills":["Mech Design","CAD","Optics","Vendor Management"]},
+  {"name":"Timothee Hirt","cynlr":1.0,"exp":1.0,"level":"Engineer 2","allocs":{"Audi(Door Assembly)":50,"Robotics Research":45,"Documentation":5},"skills":["Robotics","Simulations","ML","Algo Experiments","Python","C++","CAD"]},
+  {"name":"Michael Bombile","cynlr":2.0,"exp":14.0,"level":"Principal Engineer","allocs":{"CyRo":10,"Audi(Door Assembly)":10,"AMAT -1 (Kitting)":15,"Robotics Research":75,"Hiring":5},"skills":["Robotics","Control","Systems Modeling & Identification","Optimization","ML, DL","Vision","Simulations","Python","C++","Project Managment"]},
+  {"name":"Hossein Afshari","cynlr":1.0,"exp":18.0,"level":"Principal Engineer","allocs":{"CyNoid":5,"SW Tools":20,"Research/Exploration - SW":20,"Code Refactoring":5,"DevOps":50},"skills":["DevOps/SDLC/CICD","C/C++","Python","LabVIEW","AI,ML,DL,LLM","FPGA,HDL","ROS2","Electrical/Electronics"]},
+  {"name":"Sydney Hauke","cynlr":1.0,"exp":5.0,"level":"Engineer 3","allocs":{"SW Tools":50,"Research/Exploration - SW":35,"Demo Development":5,"DevOps":5,"Hiring":5},"skills":["C/C++","Python","CUDA","LabVIEW","Embedded, FPGA","AI, ML, DL"]},
+  {"name":"Shushuai Li","cynlr":1.0,"exp":12.0,"level":"Senior Engineer","allocs":{"CLX":30,"AMAT -1 (Kitting)":20,"SW Tools":20,"Robotics Research":30},"skills":["Robotics","Control","Vision","ML, DL, RL","Simulations","Python","C++"]},
+  {"name":"Advaith Sriram","cynlr":0.3,"exp":3.0,"level":"Engineer Intern","allocs":{"Robotics Research":100},"skills":["Robotics","Vision, Active Perception","ML, DL, RL, DRL","Simulations","Python","Algo Experiments"]},
+  {"name":"Oussama Jaffal","cynlr":0.3,"exp":3.0,"level":"Engineer Intern","allocs":{"Robotics Research":100},"skills":["Robotics","ML, DL, RL, DRL, NLP","Simulations","Multi-sensor Fusion","Python","Algo Experiments"]}
+];
+
+// type: 'internal-product' | 'external' | 'internal-support'
+const PROJECTS = [
+  {"key":"CLX","label":"CLX","color":"#06b6d4","type":"internal-product"},
+  {"key":"CyRo","label":"CyRo","color":"#60a5fa","type":"internal-product"},
+  {"key":"CyNoid","label":"CyNoid","color":"#a78bfa","type":"internal-product"},
+  {"key":"Audi(Door Assembly)","label":"Audi","color":"#f59e0b","type":"external"},
+  {"key":"Lam Research (QC Cup Assembly)","label":"Lam Research","color":"#8b5cf6","type":"external"},
+  {"key":"Schneider Electric - India","label":"Schneider","color":"#10b981","type":"external"},
+  {"key":"Hyundai","label":"Hyundai","color":"#3b82f6","type":"external"},
+  {"key":"AMAT -1 (Kitting)","label":"AMAT-1","color":"#06b6d4","type":"external"},
+  {"key":"AMAT -2 (Frame Handling)","label":"AMAT-2","color":"#f97316","type":"external"},
+  {"key":"HW Tools","label":"HW Tools","color":"#f43f5e","type":"internal-support"},
+  {"key":"SW Tools","label":"SW Tools","color":"#22d3ee","type":"internal-support"},
+  {"key":"Research/Exploration - HW","label":"R&E HW","color":"#fb923c","type":"internal-support"},
+  {"key":"Research/Exploration - SW","label":"R&E SW","color":"#34d399","type":"internal-support"},
+  {"key":"Demo Development","label":"Demo Dev","color":"#fbbf24","type":"internal-support"},
+  {"key":"Neuroscience, Vision Research IISC","label":"Neurosci / IISC","color":"#c084fc","type":"internal-support"},
+  {"key":"Robotics Research","label":"Robotics Research","color":"#4ade80","type":"internal-support"},
+  {"key":"Gripper","label":"Gripper","color":"#f472b6","type":"internal-support"},
+  {"key":"Product Packaging","label":"Product Pack","color":"#fb7185","type":"internal-support"},
+  {"key":"Code Refactoring","label":"Code Refactor","color":"#a3e635","type":"internal-support"},
+  {"key":"DevOps","label":"DevOps","color":"#38bdf8","type":"internal-support"},
+  {"key":"Hiring","label":"Hiring","color":"#facc15","type":"internal-support"},
+  {"key":"Documentation","label":"Docs","color":"#94a3b8","type":"internal-support"}
+];
+
+const TYPE_BADGE = {
+  'internal-product': {text: 'INTERNAL PRODUCT', bg: 'rgba(6,182,212,0.18)', border: '#06b6d4'},
+  'external':         {text: 'EXTERNAL',         bg: 'rgba(251,191,36,0.18)', border: '#fbbf24'},
+  'internal-support': {text: 'INTERNAL',         bg: 'rgba(100,116,139,0.18)', border: '#64748b'}
+};
+
+// ─── LEVEL COLORS ─────────────────────────────────────────────────────────────
+const LEVEL_COLOR = {
+  'Intern':             0xfbbf24,
+  'Engineer Intern':    0x93c5fd,
+  'Engineer 1':         0x60a5fa,
+  'Engineer 2':         0x3b82f6,
+  'Engineer 3':         0x1d4ed8,
+  'Lead':               0x4ade80,
+  'Senior Engineer':    0xf97316,
+  'Principal Engineer': 0xe879f9
+};
+
+const LEVEL_COLOR_HEX = {
+  'Intern':             '#fbbf24',
+  'Engineer Intern':    '#93c5fd',
+  'Engineer 1':         '#60a5fa',
+  'Engineer 2':         '#3b82f6',
+  'Engineer 3':         '#1d4ed8',
+  'Lead':               '#4ade80',
+  'Senior Engineer':    '#f97316',
+  'Principal Engineer': '#e879f9'
+};
+
+const STRIPE_DEF = {
+  'Intern':             {n:0,star:false,color:null},
+  'Engineer Intern':    {n:1,star:false,color:'rgba(180,210,255,0.65)'},
+  'Engineer 1':         {n:1,star:false,color:'rgba(255,215,0,0.80)'},
+  'Engineer 2':         {n:2,star:false,color:'rgba(255,215,0,0.80)'},
+  'Engineer 3':         {n:3,star:false,color:'rgba(255,215,0,0.80)'},
+  'Lead':               {n:3,star:false,color:'rgba(200,225,255,0.80)'},
+  'Senior Engineer':    {n:3,star:true, color:'rgba(255,215,0,0.85)'},
+  'Principal Engineer': {n:4,star:true, color:'rgba(255,230,100,0.90)'}
+};
+
+// ─── SHAPE LOGIC ──────────────────────────────────────────────────────────────
+// 2 triangles per 6 months; 6 triangles = 1 complete hexagon (at 1.5 yrs)
+// stacking starts when hexCount >= 1 (visible from ~2 yrs when triCount > 0 again)
+function shapeOf(cynlr) {
+  const totalTris = cynlr < 0.5 ? 2 : Math.floor(cynlr / 0.5) * 2;
+  return { hexCount: Math.floor(totalTris / 6), triCount: totalTris % 6 };
+}
+
+function primaryProject(person) {
+  let best = null, bestPct = 0;
+  for (const [k, v] of Object.entries(person.allocs)) {
+    if (v > bestPct) { bestPct = v; best = k; }
+  }
+  return best;
+}
+
+// ─── HEX/PARTIAL GEOMETRY BUILDER ────────────────────────────────────────────
+// numTris 1-6 fan from center; numTris>=6 full hex outline.
+// startAngleDeg rotates the whole shape so sectors can be placed side-by-side.
+function makeLayerGeom(R, numTris, H, startAngleDeg = 0) {
+  const shape = new THREE.Shape();
+  const verts = Array.from({length: 7}, (_, i) => {
+    const a = (i * 60 - 90 + startAngleDeg) * Math.PI / 180;
+    return [R * Math.cos(a), R * Math.sin(a)];
+  });
+  if (numTris >= 6) {
+    shape.moveTo(verts[0][0], verts[0][1]);
+    for (let i = 1; i < 6; i++) shape.lineTo(verts[i][0], verts[i][1]);
+  } else {
+    shape.moveTo(0, 0);
+    for (let i = 0; i <= numTris; i++) shape.lineTo(verts[i][0], verts[i][1]);
+  }
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape, {depth: H, bevelEnabled: false});
+}
+
+// ─── THREE.JS SETUP ───────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030814);
+// scene.fog removed — no distance fade
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(0, 60, 80);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 5;
+controls.maxDistance = 350;
+controls.maxPolarAngle = Math.PI / 2.05;
+controls.target.set(0, 2, 0);
+
+// Floor
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshStandardMaterial({color:0x040a1c, roughness:0.9, metalness:0.1})
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.y = -0.02;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(300, 60, 0x0f1f3d, 0x0a1628);
+grid.position.y = 0;
+scene.add(grid);
+
+// Ambient + directional
+scene.add(new THREE.AmbientLight(0x223366, 0.8));
+const sun = new THREE.DirectionalLight(0x7fb8ff, 1.2);
+sun.position.set(5, 15, 8);
+scene.add(sun);
+
+// Dim separation light — sits low between tiles, highlights gaps
+const sepLight = new THREE.PointLight(0xfff4e0, 18, 25);
+sepLight.position.set(0, 0.6, 0);
+scene.add(sepLight);
+const sepLight2 = new THREE.PointLight(0xe0f0ff, 12, 20);
+sepLight2.position.set(0, 0.6, 0);
+scene.add(sepLight2);
+
+// Orbiting colored point lights
+const orbitLights = [
+  {light: new THREE.PointLight(0x06b6d4, 300, 120), phase: 0,    r: 40, speed: 0.35},
+  {light: new THREE.PointLight(0xe879f9, 250, 100), phase: 2.09, r: 35, speed: 0.28},
+  {light: new THREE.PointLight(0x4ade80, 200, 110), phase: 4.19, r: 50, speed: 0.22}
+];
+orbitLights.forEach(({light}) => scene.add(light));
+
+// ─── PERSON MESH CREATION ─────────────────────────────────────────────────────
+const HEX_R = 3.3;
+const PIECE_H = 1.2;
+const COIN_GAP = 0.12;
+
+const gridMeshes = [];      // meshes in people grid view
+const projectMeshes = [];   // meshes in project cluster view
+const hierarchyMeshes = []; // meshes in hierarchy view
+const flowMeshes = [];      // meshes in flow view
+let activeMeshes = gridMeshes;
+
+const personGroups = {};          // name → group (people grid)
+const projectClusterGroups = {};  // projKey → group (project view)
+const hierarchyGroups = {};       // name_h → group (hierarchy view)
+const flowGroups = {};            // projKey_f → group (flow view)
+const radarMeshes = [];           // meshes in distribution/radar view
+const radarGroups = {};           // name_r → group
+
+// Builds person prisms into any parent group, registers meshes into meshList
+function addPersonShape(person, parentGroup, lx, lz, meshList) {
+  const sub = new THREE.Group();
+  sub.position.set(lx, 0, lz);
+  parentGroup.add(sub);
+
+  const {hexCount, triCount} = shapeOf(person.cynlr);
+  const baseColor = LEVEL_COLOR[person.level] || 0x60a5fa;
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: baseColor,
+    metalness: 0.35,
+    roughness: 0.25,
+    emissive: baseColor,
+    emissiveIntensity: 0.08
+  });
+
+  let yOff = 0;
+
+  for (let k = 0; k < hexCount; k++) {
+    const mesh = new THREE.Mesh(makeLayerGeom(HEX_R, 6, PIECE_H), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = yOff;
+    yOff += PIECE_H + COIN_GAP;
+    mesh.userData = {person, baseY: mesh.position.y, floatPhase: Math.random()*Math.PI*2, mat};
+    meshList.push(mesh);
+    sub.add(mesh);
+  }
+
+  if (triCount > 0) {
+    const mesh = new THREE.Mesh(makeLayerGeom(HEX_R, triCount, PIECE_H), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = yOff;
+    mesh.userData = {person, baseY: yOff + PIECE_H/2, floatPhase: Math.random()*Math.PI*2, mat};
+    meshList.push(mesh);
+    sub.add(mesh);
+    yOff += PIECE_H + COIN_GAP;
+  }
+
+  // Exp ring
+  const ringR = Math.max(0.5, person.exp) * 0.07 + HEX_R + 0.12;
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(ringR, 0.025, 4, 6),
+    new THREE.MeshStandardMaterial({color: baseColor, emissive: baseColor, emissiveIntensity: 0.6})
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.02;
+  sub.add(ring);
+}
+
+function createPersonPrisms(person, x, z) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  scene.add(group);
+  personGroups[person.name] = group;
+  addPersonShape(person, group, 0, 0, gridMeshes);
+  return group;
+}
+
+function makeClusterLabel(proj, memberCount) {
+  const badge = TYPE_BADGE[proj.type] || TYPE_BADGE['internal-support'];
+  const W = 512, H = 128;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Background pill
+  ctx.fillStyle = 'rgba(3,8,20,0.82)';
+  roundRect(ctx, 0, 0, W, H, 12);
+  ctx.fill();
+
+  // Left accent bar (project color)
+  ctx.fillStyle = proj.color;
+  roundRect(ctx, 0, 0, 8, H, [12, 0, 0, 12]);
+  ctx.fill();
+
+  // Type badge
+  ctx.fillStyle = badge.bg;
+  roundRect(ctx, 20, 10, 200, 36, 6);
+  ctx.fill();
+  ctx.strokeStyle = badge.border;
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 20, 10, 200, 36, 6);
+  ctx.stroke();
+  ctx.font = 'bold 17px Segoe UI';
+  ctx.fillStyle = badge.border;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(badge.text, 30, 28);
+
+  // Project name
+  ctx.font = 'bold 30px Segoe UI';
+  ctx.fillStyle = '#f1f5f9';
+  ctx.textBaseline = 'top';
+  ctx.fillText(proj.label, 20, 52);
+
+  // Member count
+  ctx.font = '19px Segoe UI';
+  ctx.fillStyle = '#64748b';
+  ctx.textBaseline = 'top';
+  ctx.fillText(memberCount + ' people', 20, 90);
+
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(W/40, H/40, 1);
+  return sprite;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (typeof r === 'number') r = [r,r,r,r];
+  ctx.beginPath();
+  ctx.moveTo(x + r[0], y);
+  ctx.lineTo(x + w - r[1], y); ctx.arcTo(x+w, y, x+w, y+r[1], r[1]);
+  ctx.lineTo(x + w, y + h - r[2]); ctx.arcTo(x+w, y+h, x+w-r[2], y+h, r[2]);
+  ctx.lineTo(x + r[3], y + h); ctx.arcTo(x, y+h, x, y+h-r[3], r[3]);
+  ctx.lineTo(x, y + r[0]); ctx.arcTo(x, y, x+r[0], y, r[0]);
+  ctx.closePath();
+}
+
+function makeSectionLabel(text, color, borderColor) {
+  const W = 640, H = 72;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(3,8,20,0.0)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.font = 'bold 36px Segoe UI';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, W/2, H/2);
+  // underline
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W*0.1, H-4); ctx.lineTo(W*0.9, H-4);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(W/18, H/18, 1);
+  return sprite;
+}
+
+// Compact hexagonal tiling positions for N items
+function hexTilePos(n, spc) {
+  const cols = Math.ceil(Math.sqrt(n * 1.2)); // slightly wider than square
+  return Array.from({length: n}, (_, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const rows = Math.ceil(n / cols);
+    return {
+      x: (col - (cols - 1) / 2) * spc + (row % 2) * spc * 0.5,
+      z: (row - (rows - 1) / 2) * spc * 0.866
+    };
+  });
+}
+
+function buildProjectClusters() {
+  const TOWER_SPC = HEX_R * 2 + 0.8; // tight hex packing — just a small gap between towers
+  const GROUP_SEP = 55; // z-distance between type zones
+
+  const typeOrder = ['external', 'internal-product', 'internal-support'];
+  const typeZCenter = { 'external': -GROUP_SEP, 'internal-product': 0, 'internal-support': GROUP_SEP };
+  const typeLabel = {
+    'external':         {text: '— External Projects —', color: '#fbbf24', border: '#fbbf24'},
+    'internal-product': {text: '— Internal Products —', color: '#06b6d4', border: '#06b6d4'},
+    'internal-support': {text: '— Internal Support —',  color: '#64748b', border: '#64748b'}
+  };
+
+  typeOrder.forEach(type => {
+    const projs = PROJECTS.filter(p =>
+      p.type === type && PEOPLE.some(person => (person.allocs[p.key] || 0) > 0)
+    );
+    if (!projs.length) return;
+
+    const groupZ = typeZCenter[type];
+    const tilePositions = hexTilePos(projs.length, TOWER_SPC);
+
+    // Section label — find the front-most tile's z and place label ahead of it
+    const frontZ = Math.min(...tilePositions.map(p => p.z));
+    const sectionSprite = makeSectionLabel(typeLabel[type].text, typeLabel[type].color, typeLabel[type].border);
+    sectionSprite.position.set(0, 9, groupZ + frontZ - TOWER_SPC * 1.1);
+    sectionSprite.visible = false;
+    scene.add(sectionSprite);
+    if (!window._sectionLabels) window._sectionLabels = [];
+    window._sectionLabels.push(sectionSprite);
+
+    projs.forEach((proj, pi) => {
+      const {x: wx, z: wz} = tilePositions[pi];
+      const finalX = wx, finalZ = groupZ + wz;
+
+    // Sort members by allocation desc so largest contributors sit first
+    const members = PEOPLE
+      .filter(p => (p.allocs[proj.key] || 0) > 0)
+      .map(p => ({person: p, pct: p.allocs[proj.key]}))
+      .sort((a, b) => b.pct - a.pct);
+
+    const towerGroup = new THREE.Group();
+    towerGroup.position.set(finalX, 0, finalZ);
+    towerGroup.visible = false;
+    scene.add(towerGroup);
+    projectClusterGroups[proj.key] = towerGroup;
+
+    let yOff = 0;
+
+    members.forEach(({person}) => {
+      const color = LEVEL_COLOR[person.level] || 0x60a5fa;
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        metalness: 0.35,
+        roughness: 0.25,
+        emissive: color,
+        emissiveIntensity: 0.08
+      });
+
+      const geom = makeLayerGeom(HEX_R, 6, PIECE_H);
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = yOff;
+      mesh.userData = {person, projKey: proj.key, baseY: yOff + PIECE_H / 2, floatPhase: Math.random() * Math.PI * 2, mat};
+      projectMeshes.push(mesh);
+      towerGroup.add(mesh);
+      yOff += PIECE_H + COIN_GAP;
+    });
+
+    const towerTop = yOff;
+    const label = makeClusterLabel(proj, members.length);
+    label.position.set(0, towerTop + 2.2, 0);
+    towerGroup.add(label);
+
+    // Ground ring in project color
+    const borderRing = new THREE.Mesh(
+      new THREE.TorusGeometry(HEX_R + 0.35, 0.04, 4, 6),
+      new THREE.MeshStandardMaterial({color: proj.color, emissive: proj.color, emissiveIntensity: 0.5, transparent: true, opacity: 0.6})
+    );
+    borderRing.rotation.x = Math.PI / 2;
+    borderRing.position.y = 0.01;
+    towerGroup.add(borderRing);
+    }); // end projs.forEach
+  }); // end typeOrder.forEach
+}
+
+// ─── LAYOUTS ──────────────────────────────────────────────────────────────────
+const GRID_COLS = 8;
+const GRID_SPC = 8.5;
+const HEX_OFFSET = GRID_SPC * 0.5;
+
+function peopleGridLayout() {
+  const rows = Math.ceil(PEOPLE.length / GRID_COLS);
+  return PEOPLE.map((person, i) => {
+    const col = i % GRID_COLS;
+    const row = Math.floor(i / GRID_COLS);
+    const x = (col - GRID_COLS/2 + 0.5) * GRID_SPC + (row % 2 === 1 ? HEX_OFFSET*0.5 : 0);
+    const z = (row - (rows-1)/2) * GRID_SPC * 0.87;
+    return {person, x, z};
+  });
+}
+
+function projectTowersLayout() {
+  // Group people by primary project, place towers in project clusters
+  const projMap = {};
+  PROJECTS.forEach(p => { projMap[p.key] = []; });
+  PEOPLE.forEach(person => {
+    const pp = primaryProject(person);
+    if (pp && projMap[pp]) projMap[pp].push(person);
+    else if (!pp) {
+      // unallocated — put in a misc group
+      if (!projMap['__misc']) projMap['__misc'] = [];
+      projMap['__misc'].push(person);
+    }
+  });
+
+  const activeProjs = PROJECTS.filter(p => (projMap[p.key]||[]).length > 0);
+  const CLUSTER_SPC = 7.0;
+  const PC = Math.ceil(Math.sqrt(activeProjs.length));
+
+  const positions = [];
+  activeProjs.forEach((proj, pi) => {
+    const pcol = pi % PC;
+    const prow = Math.floor(pi / PC);
+    const basex = (pcol - PC/2 + 0.5) * CLUSTER_SPC;
+    const basez = (prow - PC/2 + 0.5) * CLUSTER_SPC;
+    const members = projMap[proj.key] || [];
+    members.forEach((person, mi) => {
+      const mc = Math.ceil(Math.sqrt(Math.max(members.length,1)));
+      const mx = (mi % mc - mc/2 + 0.5) * 1.8;
+      const mz = (Math.floor(mi/mc) - mc/2 + 0.5) * 1.8;
+      positions.push({person, x: basex + mx, z: basez + mz});
+    });
+  });
+
+  // unallocated
+  (projMap['__misc']||[]).forEach((person, mi) => {
+    positions.push({person, x: (PC/2 + 1) * CLUSTER_SPC + mi * 2.0, z: 0});
+  });
+
+  return positions;
+}
+
+// ─── HIERARCHY VIEW ───────────────────────────────────────────────────────────
+const HIER_LEVEL_Y = {
+  'Intern': 0, 'Engineer Intern': 8, 'Engineer 1': 16, 'Engineer 2': 24,
+  'Engineer 3': 32, 'Lead': 40, 'Senior Engineer': 48, 'Principal Engineer': 56
+};
+
+function makeHierLabel(text, count, color) {
+  const W = 560, H = 80;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = 'bold 28px Segoe UI';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, 10, 8);
+  ctx.font = '22px Segoe UI';
+  ctx.fillStyle = '#475569';
+  ctx.fillText(count + ' people', 10, 44);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(W / 24, H / 24, 1);
+  return sp;
+}
+
+function buildHierarchyView() {
+  const TIER_SPC = 9.2;
+  if (!window._hierExtras) window._hierExtras = [];
+
+  const byLevel = {};
+  PEOPLE.forEach(p => {
+    if (!byLevel[p.level]) byLevel[p.level] = [];
+    byLevel[p.level].push(p);
+  });
+
+  Object.entries(HIER_LEVEL_Y).forEach(([level, yBase]) => {
+    const people = byLevel[level] || [];
+    const col = LEVEL_COLOR[level] || 0x60a5fa;
+    const colHex = LEVEL_COLOR_HEX[level] || '#60a5fa';
+
+    // Place people in a hex-tile grid at this tier's y level
+    const positions = hexTilePos(Math.max(1, people.length), TIER_SPC);
+    const spreadR = Math.max(TIER_SPC, positions.reduce((m, p) => Math.max(m, Math.sqrt(p.x*p.x + p.z*p.z)), 0) + TIER_SPC);
+
+    // Faint platform disk
+    const disk = new THREE.Mesh(
+      new THREE.CylinderGeometry(spreadR, spreadR, 0.08, 48),
+      new THREE.MeshStandardMaterial({color: col, transparent: true, opacity: 0.04, emissive: col, emissiveIntensity: 0.5})
+    );
+    disk.position.set(0, yBase - 0.05, 0);
+    disk.visible = false;
+    scene.add(disk);
+    window._hierExtras.push(disk);
+
+    // Glowing rim ring
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(spreadR, 0.07, 4, 56),
+      new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: 1.0, transparent: true, opacity: 0.45})
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(0, yBase, 0);
+    rim.visible = false;
+    scene.add(rim);
+    window._hierExtras.push(rim);
+
+    // Level label to the left
+    const lbl = makeHierLabel(level, people.length, colHex);
+    lbl.position.set(-spreadR - 9, yBase + 2, 0);
+    lbl.visible = false;
+    scene.add(lbl);
+    window._hierExtras.push(lbl);
+
+    people.forEach((person, i) => {
+      const {x, z} = positions[i];
+      const grp = new THREE.Group();
+      grp.position.set(x, yBase, z);
+      grp.visible = false;
+      scene.add(grp);
+      hierarchyGroups[person.name + '_h'] = grp;
+      addPersonShape(person, grp, 0, 0, hierarchyMeshes);
+    });
+  });
+}
+
+// ─── FLOW VIEW ────────────────────────────────────────────────────────────────
+function buildFlowView() {
+  if (!window._flowArcs)   window._flowArcs = [];
+  if (!window._flowLabels) window._flowLabels = [];
+  if (!window._flowRings)  window._flowRings  = [];
+
+  // DAG column positions (x axis = pipeline direction)
+  const COL_X     = [-108, -72, -36, 0, 36, 70, 104];
+  const COL_LABEL = ['Foundation','Infrastructure','Tooling','Research','Core Platform','Products','Solutions'];
+  const COL_COLOR = ['#c084fc','#64748b','#22d3ee','#4ade80','#06b6d4','#a78bfa','#f59e0b'];
+  const Z_SPC     = 19;
+
+  const PROJ_COL = {
+    'Neuroscience, Vision Research IISC': 0,
+    'Research/Exploration - HW': 0,
+    'Research/Exploration - SW': 0,
+    'DevOps': 1,
+    'Code Refactoring': 1,
+    'SW Tools': 2,
+    'HW Tools': 2,
+    'Robotics Research': 3,
+    'CLX': 4,
+    'CyRo': 5,
+    'CyNoid': 5,
+    'Audi(Door Assembly)': 6,
+    'Lam Research (QC Cup Assembly)': 6,
+    'AMAT -1 (Kitting)': 6,
+    'AMAT -2 (Frame Handling)': 6,
+    'Schneider Electric - India': 6,
+    'Hyundai': 6,
+  };
+
+  const DAG_EDGES = [
+    ['Neuroscience, Vision Research IISC','SW Tools'],
+    ['Research/Exploration - SW','SW Tools'],
+    ['Research/Exploration - HW','HW Tools'],
+    ['DevOps','SW Tools'],
+    ['Code Refactoring','SW Tools'],
+    ['SW Tools','Robotics Research'],
+    ['HW Tools','Robotics Research'],
+    ['SW Tools','CLX'],
+    ['HW Tools','CLX'],
+    ['Robotics Research','CLX'],
+    ['CLX','CyRo'],
+    ['CLX','CyNoid'],
+    ['CyRo','Audi(Door Assembly)'],
+    ['CyRo','Lam Research (QC Cup Assembly)'],
+    ['CyRo','AMAT -1 (Kitting)'],
+    ['CyRo','AMAT -2 (Frame Handling)'],
+    ['CyRo','Schneider Electric - India'],
+    ['CyNoid','Audi(Door Assembly)'],
+    ['CyNoid','Lam Research (QC Cup Assembly)'],
+    ['CyNoid','Hyundai'],
+    ['CyNoid','Schneider Electric - India'],
+  ];
+
+  // Group projects by column
+  const colProjs = {};
+  Object.entries(PROJ_COL).forEach(([key, col]) => {
+    if (!colProjs[col]) colProjs[col] = [];
+    colProjs[col].push(key);
+  });
+
+  const towerPos = {};
+
+  Object.entries(colProjs).forEach(([colStr, projKeys]) => {
+    const col = parseInt(colStr);
+    const cx  = COL_X[col];
+    const n   = projKeys.length;
+    const zs  = Array.from({length: n}, (_, i) => (i - (n - 1) / 2) * Z_SPC);
+
+    // Column header label
+    const colLbl = makeSectionLabel('— ' + COL_LABEL[col] + ' —', COL_COLOR[col], COL_COLOR[col]);
+    colLbl.position.set(cx, 13, zs[0] - Z_SPC * 0.9);
+    colLbl.visible = false;
+    scene.add(colLbl);
+    window._flowLabels.push(colLbl);
+
+    // Vertical column guide line
+    const lineH = (n - 1) * Z_SPC + 4;
+    const linePts = [new THREE.Vector3(cx, 0.05, zs[0] - 2), new THREE.Vector3(cx, 0.05, zs[n-1] + 2)];
+    const lineG = new THREE.BufferGeometry().setFromPoints(linePts);
+    const lineM = new THREE.LineBasicMaterial({color: new THREE.Color(COL_COLOR[col]), transparent: true, opacity: 0.15});
+    const lineObj = new THREE.Line(lineG, lineM);
+    lineObj.visible = false;
+    scene.add(lineObj);
+    window._flowLabels.push(lineObj);
+
+    projKeys.forEach((projKey, pi) => {
+      const proj = PROJECTS.find(p => p.key === projKey);
+      if (!proj) return;
+      const wz = zs[pi];
+
+      const members = PEOPLE
+        .filter(p => (p.allocs[projKey] || 0) > 0)
+        .map(p => ({person: p, pct: p.allocs[projKey]}))
+        .sort((a, b) => b.pct - a.pct);
+
+      const tg = new THREE.Group();
+      tg.position.set(cx, 0, wz);
+      tg.visible = false;
+      scene.add(tg);
+      flowGroups[projKey + '_f'] = tg;
+
+      let yOff = 0;
+      members.forEach(({person}) => {
+        const color = LEVEL_COLOR[person.level] || 0x60a5fa;
+        const mat = new THREE.MeshStandardMaterial({color, metalness: 0.35, roughness: 0.25, emissive: color, emissiveIntensity: 0.08});
+        const mesh = new THREE.Mesh(makeLayerGeom(HEX_R, 6, PIECE_H), mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.y = yOff;
+        mesh.userData = {person, projKey, baseY: yOff + PIECE_H / 2, floatPhase: Math.random() * Math.PI * 2, mat};
+        flowMeshes.push(mesh);
+        tg.add(mesh);
+        yOff += PIECE_H + COIN_GAP;
+      });
+
+      const tLbl = makeClusterLabel(proj, members.length);
+      tLbl.position.set(0, yOff + 2.2, 0);
+      tg.add(tLbl);
+
+      // Clickable ground ring — opens project panel
+      const bRing = new THREE.Mesh(
+        new THREE.TorusGeometry(HEX_R + 0.45, 0.09, 4, 8),
+        new THREE.MeshStandardMaterial({color: proj.color, emissive: proj.color, emissiveIntensity: 0.9, transparent: true, opacity: 0.7})
+      );
+      bRing.rotation.x = Math.PI / 2;
+      bRing.position.y = 0.02;
+      bRing.userData = {projKey, isRing: true};
+      tg.add(bRing);
+      window._flowRings.push(bRing);
+
+      towerPos[projKey] = new THREE.Vector3(cx, Math.max(yOff * 0.4, 1), wz);
+    });
+  });
+
+  // DAG dependency arcs
+  DAG_EDGES.forEach(([srcKey, tgtKey]) => {
+    const posA = towerPos[srcKey], posB = towerPos[tgtKey];
+    if (!posA || !posB) return;
+    const dx   = posB.x - posA.x;
+    const ctrl = new THREE.Vector3(posA.x + dx * 0.5, Math.max(posA.y, posB.y) + dx * 0.18, (posA.z + posB.z) / 2);
+    const curve = new THREE.QuadraticBezierCurve3(posA, ctrl, posB);
+    const arcGeom = new THREE.TubeGeometry(curve, 22, 0.09, 5, false);
+    const arcMat  = new THREE.MeshStandardMaterial({color: 0x1e3a5f, emissive: 0x1e3a5f, emissiveIntensity: 1.2, transparent: true, opacity: 0.55});
+    const arcMesh = new THREE.Mesh(arcGeom, arcMat);
+    arcMesh.userData = {srcKey, tgtKey, baseOpacity: 0.55};
+    arcMesh.visible = false;
+    scene.add(arcMesh);
+    window._flowArcs.push(arcMesh);
+  });
+}
+
+// ─── DISTRIBUTION / RADAR VIEW ───────────────────────────────────────────────
+function buildRadarView() {
+  const POLE_R  = 44;   // circle radius
+  const POLE_H  = 9;    // pole cylinder height
+
+  if (!window._radarPoles) window._radarPoles = [];
+  if (!window._radarLines) window._radarLines = [];
+
+  const internalProjs = PROJECTS.filter(p =>
+    p.type !== 'external' && PEOPLE.some(person => (person.allocs[p.key] || 0) > 0)
+  );
+
+  // Pole world positions
+  const polePos = {};
+  internalProjs.forEach((proj, i) => {
+    const angle = (i / internalProjs.length) * Math.PI * 2 - Math.PI / 2;
+    polePos[proj.key] = {x: POLE_R * Math.cos(angle), z: POLE_R * Math.sin(angle), angle};
+  });
+
+  // Outer decorative ring
+  const outerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(POLE_R, 0.07, 4, 80),
+    new THREE.MeshStandardMaterial({color: 0x1e293b, emissive: 0x1e293b, emissiveIntensity: 1.0, transparent: true, opacity: 0.5})
+  );
+  outerRing.rotation.x = Math.PI / 2;
+  outerRing.visible = false;
+  scene.add(outerRing);
+  window._radarPoles.push(outerRing);
+
+  // Spoke lines from center to each pole
+  internalProjs.forEach(proj => {
+    const {x: px, z: pz} = polePos[proj.key];
+    const pts = [new THREE.Vector3(0,0.01,0), new THREE.Vector3(px,0.01,pz)];
+    const spokeGeom = new THREE.BufferGeometry().setFromPoints(pts);
+    const spokeMat = new THREE.LineBasicMaterial({color: 0x0f1f3d, transparent: true, opacity: 0.6});
+    const spoke = new THREE.Line(spokeGeom, spokeMat);
+    spoke.visible = false;
+    scene.add(spoke);
+    window._radarPoles.push(spoke);
+  });
+
+  // Poles + orbs + labels
+  internalProjs.forEach((proj, i) => {
+    const {x: px, z: pz, angle} = polePos[proj.key];
+    const col = new THREE.Color(proj.color);
+
+    const poleMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.14, POLE_H, 8),
+      new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: 1.0, transparent: true, opacity: 0.85})
+    );
+    poleMesh.position.set(px, POLE_H / 2, pz);
+    poleMesh.userData = {projKey: proj.key, isPole: true};
+    poleMesh.visible = false;
+    scene.add(poleMesh);
+    window._radarPoles.push(poleMesh);
+    if (!window._radarClickable) window._radarClickable = [];
+    window._radarClickable.push(poleMesh);
+
+    const orbMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.75, 14, 14),
+      new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: 2.5})
+    );
+    orbMesh.position.set(px, POLE_H + 0.75, pz);
+    orbMesh.userData = {projKey: proj.key, isPole: true, orbMat: orbMesh.material};
+    orbMesh.visible = false;
+    scene.add(orbMesh);
+    window._radarPoles.push(orbMesh);
+    window._radarClickable.push(orbMesh);
+
+    const pLight = new THREE.PointLight(col, 60, 28);
+    pLight.position.set(px, POLE_H, pz);
+    pLight.visible = false;
+    scene.add(pLight);
+    window._radarPoles.push(pLight);
+
+    const memberCount = PEOPLE.filter(p => (p.allocs[proj.key] || 0) > 0).length;
+    const lbl = makeClusterLabel(proj, memberCount);
+    const lblR = POLE_R + 7.5;
+    lbl.position.set(lblR * Math.cos(angle), POLE_H + 3.5, lblR * Math.sin(angle));
+    lbl.visible = false;
+    scene.add(lbl);
+    window._radarPoles.push(lbl);
+  });
+
+  // Compute each person's weighted centroid position
+  const personPositions = PEOPLE.map((person, idx) => {
+    let wx = 0, wz = 0, total = 0;
+    internalProjs.forEach(proj => {
+      const alloc = person.allocs[proj.key] || 0;
+      if (alloc > 0) {
+        wx += alloc * polePos[proj.key].x;
+        wz += alloc * polePos[proj.key].z;
+        total += alloc;
+      }
+    });
+    if (total > 0) {
+      return {person, x: wx / total, z: wz / total, total};
+    }
+    // No internal allocation — cluster at center
+    return {person, x: Math.sin(idx * 1.9) * 3.5, z: Math.cos(idx * 1.9) * 3.5, total: 0};
+  });
+
+  // Group people who land within 1 unit of each other and spread with hexTilePos
+  const bucket = {};
+  personPositions.forEach((pp, i) => {
+    const k = Math.round(pp.x) + ',' + Math.round(pp.z);
+    if (!bucket[k]) bucket[k] = [];
+    bucket[k].push(i);
+  });
+  Object.values(bucket).forEach(indices => {
+    if (indices.length <= 1) return;
+    const spread = hexTilePos(indices.length, HEX_R * 2.5);
+    indices.forEach((idx, si) => {
+      personPositions[idx].x += spread[si].x;
+      personPositions[idx].z += spread[si].z;
+    });
+  });
+
+  // Build person shapes
+  personPositions.forEach(({person, x, z}) => {
+    const grp = new THREE.Group();
+    grp.position.set(x, 0, z);
+    grp.visible = false;
+    scene.add(grp);
+    radarGroups[person.name + '_r'] = grp;
+    addPersonShape(person, grp, 0, 0, radarMeshes);
+  });
+
+  // Pull lines: person → pole, opacity = allocation %
+  personPositions.forEach(({person, x, z}) => {
+    internalProjs.forEach(proj => {
+      const alloc = person.allocs[proj.key] || 0;
+      if (alloc < 8) return;
+      const {x: px, z: pz} = polePos[proj.key];
+      const pts = [new THREE.Vector3(x, 0.4, z), new THREE.Vector3(px, POLE_H * 0.25, pz)];
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(proj.color),
+        transparent: true,
+        opacity: alloc / 100 * 0.65
+      });
+      const line = new THREE.Line(geom, mat);
+      line.userData = {projKey: proj.key, personName: person.name, baseOpacity: alloc / 100 * 0.65};
+      line.visible = false;
+      scene.add(line);
+      window._radarLines.push(line);
+    });
+  });
+}
+
+// ─── BUILD SCENE ──────────────────────────────────────────────────────────────
+let currentView = 'people';
+
+function buildInitialScene() {
+  peopleGridLayout().forEach(({person, x, z}) => createPersonPrisms(person, x, z));
+  buildProjectClusters();
+  buildHierarchyView();
+  buildFlowView();
+  buildRadarView();
+}
+
+buildInitialScene();
+
+// ─── VIEW SWITCHING ───────────────────────────────────────────────────────────
+const gsap = window.gsap;
+
+window.switchView = function(view) {
+  if (view === currentView) return;
+  currentView = view;
+
+  ['people','projects','hierarchy','flow','radar'].forEach(v => {
+    document.getElementById('btn-' + v).classList.toggle('active', view === v);
+  });
+
+  if (view !== 'projects' && view !== 'flow' && window.closeProjectPanel) window.closeProjectPanel();
+  if (view !== 'flow' && window.closePersonPanel) window.closePersonPanel();
+
+  // Show mode toggle only for views that have stacked coins
+  const showToggle = (view === 'projects' || view === 'flow');
+  document.getElementById('mode-toggle').style.display = showToggle ? 'flex' : 'none';
+  if (!showToggle && stackMode === 'dedication') {
+    document.getElementById('tgl-input').checked = false;
+    stackMode = 'contribution';
+    document.getElementById('lbl-contribution').classList.add('active-label');
+    document.getElementById('lbl-dedication').classList.remove('active-label');
+  }
+
+  // Hide everything
+  Object.values(personGroups).forEach(g => g.visible = false);
+  Object.values(projectClusterGroups).forEach(g => g.visible = false);
+  (window._sectionLabels || []).forEach(s => s.visible = false);
+  Object.values(hierarchyGroups).forEach(g => g.visible = false);
+  (window._hierExtras || []).forEach(s => s.visible = false);
+  Object.values(flowGroups).forEach(g => g.visible = false);
+  (window._flowArcs || []).forEach(a => a.visible = false);
+  (window._flowLabels || []).forEach(l => l.visible = false);
+  if (currentView === 'radar' && _radarSelectedPole) resetRadarHighlight();
+  Object.values(radarGroups).forEach(g => g.visible = false);
+  (window._radarPoles || []).forEach(p => p.visible = false);
+  (window._radarLines || []).forEach(l => l.visible = false);
+
+  if (view === 'people') {
+    Object.values(personGroups).forEach(g => g.visible = true);
+    activeMeshes = gridMeshes;
+    gsap.to(camera.position, {x:0, y:60, z:80, duration:1.8, ease:'power2.inOut'});
+    gsap.to(controls.target, {x:0, y:4, z:0, duration:1.8, ease:'power2.inOut'});
+
+  } else if (view === 'projects') {
+    Object.values(projectClusterGroups).forEach(g => g.visible = true);
+    (window._sectionLabels || []).forEach(s => s.visible = true);
+    activeMeshes = projectMeshes;
+    gsap.to(camera.position, {x:0, y:130, z:160, duration:1.8, ease:'power2.inOut'});
+    gsap.to(controls.target, {x:0, y:4, z:0, duration:1.8, ease:'power2.inOut'});
+
+  } else if (view === 'hierarchy') {
+    Object.values(hierarchyGroups).forEach(g => g.visible = true);
+    (window._hierExtras || []).forEach(s => s.visible = true);
+    activeMeshes = hierarchyMeshes;
+    gsap.to(camera.position, {x:0, y:50, z:95, duration:1.8, ease:'power2.inOut'});
+    gsap.to(controls.target, {x:0, y:28, z:0, duration:1.8, ease:'power2.inOut'});
+
+  } else if (view === 'flow') {
+    Object.values(flowGroups).forEach(g => g.visible = true);
+    (window._flowArcs || []).forEach(a => a.visible = true);
+    (window._flowLabels || []).forEach(l => l.visible = true);
+    activeMeshes = flowMeshes;
+    gsap.to(camera.position, {x:0, y:90, z:170, duration:1.8, ease:'power2.inOut'});
+    gsap.to(controls.target, {x:0, y:5, z:0, duration:1.8, ease:'power2.inOut'});
+
+  } else if (view === 'radar') {
+    Object.values(radarGroups).forEach(g => g.visible = true);
+    (window._radarPoles || []).forEach(p => p.visible = true);
+    (window._radarLines || []).forEach(l => l.visible = true);
+    activeMeshes = radarMeshes;
+    gsap.to(camera.position, {x:0, y:95, z:65, duration:1.8, ease:'power2.inOut'});
+    gsap.to(controls.target, {x:0, y:0, z:0, duration:1.8, ease:'power2.inOut'});
+  }
+};
+
+// ─── PROJECT DETAIL PANEL ────────────────────────────────────────────────────
+const LEVEL_ORDER_LIST = ['Principal Engineer','Senior Engineer','Lead','Engineer 3','Engineer 2','Engineer 1','Engineer Intern','Intern'];
+
+window.closeProjectPanel = function() {
+  document.getElementById('project-panel').classList.remove('open');
+};
+
+function openProjectPanel(projKey) {
+  const proj = PROJECTS.find(p => p.key === projKey);
+  if (!proj) return;
+
+  const members = PEOPLE
+    .filter(p => (p.allocs[projKey] || 0) > 0)
+    .map(p => ({person: p, pct: p.allocs[projKey]}))
+    .sort((a, b) => {
+      const lo = LEVEL_ORDER_LIST.indexOf(a.person.level) - LEVEL_ORDER_LIST.indexOf(b.person.level);
+      return lo !== 0 ? lo : b.pct - a.pct;
+    });
+
+  const totalFTE = members.reduce((s, m) => s + m.pct, 0) / 100;
+  const badge = TYPE_BADGE[proj.type] || TYPE_BADGE['internal-support'];
+
+  let membersHTML = '';
+  let lastLevel = null;
+  members.forEach(({person, pct}) => {
+    const color = LEVEL_COLOR_HEX[person.level] || '#60a5fa';
+    if (person.level !== lastLevel) {
+      lastLevel = person.level;
+      membersHTML += `<div class="pp-section-title">${person.level.toUpperCase()}</div>`;
+    }
+    membersHTML += `
+      <div class="pp-member">
+        <div class="pp-member-dot" style="background:${color}"></div>
+        <div class="pp-member-info">
+          <div class="pp-member-name">${person.name}</div>
+          <div class="pp-member-level" style="color:${color}">${person.cynlr}y CynLr · ${person.exp}y total</div>
+        </div>
+        <div class="pp-alloc">
+          <div class="pp-bar"><div class="pp-bar-fill" style="width:${pct}%;background:${proj.color}"></div></div>
+          <div class="pp-pct">${pct}%</div>
+        </div>
+      </div>`;
+  });
+
+  const skillSet = new Set();
+  members.forEach(m => m.person.skills.forEach(s => skillSet.add(s)));
+  const skillsHTML = [...skillSet].map(s => `<span class="pp-skill">${s}</span>`).join('');
+
+  const panel = document.getElementById('project-panel');
+  panel.innerHTML = `
+    <div class="pp-header" style="border-left:4px solid ${proj.color}">
+      <div>
+        <div class="pp-proj-name">${proj.label}</div>
+        <div class="pp-type-badge" style="color:${badge.border};border-color:${badge.border}">${badge.text}</div>
+      </div>
+      <button class="pp-close" onclick="closeProjectPanel()">×</button>
+    </div>
+    <div class="pp-fte"><strong>${totalFTE.toFixed(1)} FTE</strong> &nbsp;·&nbsp; ${members.length} people</div>
+    ${membersHTML}
+    ${skillSet.size > 0 ? `<div class="pp-section-title">SKILLS IN TEAM</div><div class="pp-skills">${skillsHTML}</div>` : ''}
+  `;
+  panel.classList.add('open');
+}
+
+// ─── RADAR POLE SELECTION ─────────────────────────────────────────────────────
+let _radarSelectedPole = null;
+
+function resetRadarHighlight() {
+  _radarSelectedPole = null;
+  radarMeshes.forEach(mesh => {
+    if (mesh.userData.mat) {
+      mesh.userData.mat.emissiveIntensity = 0.08;
+      mesh.userData.mat.transparent = false;
+      mesh.userData.mat.opacity = 1.0;
+    }
+  });
+  (window._radarLines || []).forEach(line => {
+    line.material.opacity = line.userData.baseOpacity;
+  });
+  (window._radarClickable || []).forEach(m => {
+    if (m.userData.orbMat) m.userData.orbMat.emissiveIntensity = 2.5;
+  });
+}
+
+function selectRadarPole(projKey) {
+  if (_radarSelectedPole === projKey) {
+    resetRadarHighlight();
+    closeProjectPanel();
+    return;
+  }
+  _radarSelectedPole = projKey;
+  openProjectPanel(projKey);
+
+  // Dim/highlight people
+  radarMeshes.forEach(mesh => {
+    const person = mesh.userData.person;
+    if (!person || !mesh.userData.mat) return;
+    const connected = (person.allocs[projKey] || 0) > 0;
+    mesh.userData.mat.emissiveIntensity = connected ? 0.45 : 0.01;
+    mesh.userData.mat.transparent = !connected;
+    mesh.userData.mat.opacity = connected ? 1.0 : 0.1;
+  });
+
+  // Brighten selected pole lines, fade others
+  (window._radarLines || []).forEach(line => {
+    if (line.userData.projKey === projKey) {
+      line.material.opacity = 0.95;
+    } else {
+      line.material.opacity = 0.0;
+    }
+  });
+
+  // Pulse the selected orb
+  (window._radarClickable || []).forEach(m => {
+    if (m.userData.orbMat) {
+      m.userData.orbMat.emissiveIntensity = m.userData.projKey === projKey ? 5.0 : 1.2;
+    }
+  });
+}
+
+// ─── STACK MODE TOGGLE ───────────────────────────────────────────────────────
+let stackMode = 'contribution';
+
+window.toggleStackMode = function(isDedication) {
+  stackMode = isDedication ? 'dedication' : 'contribution';
+  document.getElementById('lbl-contribution').classList.toggle('active-label', !isDedication);
+  document.getElementById('lbl-dedication').classList.toggle('active-label', isDedication);
+  const meshList = currentView === 'flow' ? flowMeshes
+                 : currentView === 'projects' ? projectMeshes
+                 : null;
+  if (meshList) applyStackMode(stackMode, meshList);
+};
+
+function applyStackMode(mode, meshList) {
+  // Group meshes by projKey — one coin per person per project
+  const byProj = {};
+  meshList.forEach(m => {
+    const pk = m.userData.projKey;
+    if (!pk) return;
+    if (!byProj[pk]) byProj[pk] = [];
+    byProj[pk].push(m);
+  });
+
+  Object.entries(byProj).forEach(([projKey, meshes]) => {
+    let sorted;
+    if (mode === 'dedication') {
+      // Sort ascending → highest dedication ends up on TOP (last = highest Y)
+      sorted = [...meshes].sort((a, b) => {
+        const pa = a.userData.person, pb = b.userData.person;
+        const totA = Object.values(pa.allocs).reduce((s, v) => s + v, 0) || 100;
+        const totB = Object.values(pb.allocs).reduce((s, v) => s + v, 0) || 100;
+        return ((pa.allocs[projKey] || 0) / totA) - ((pb.allocs[projKey] || 0) / totB);
+      });
+    } else {
+      // Contribution: descending by raw alloc — current default
+      sorted = [...meshes].sort((a, b) =>
+        (b.userData.person.allocs[projKey] || 0) - (a.userData.person.allocs[projKey] || 0)
+      );
+    }
+
+    let yOff = 0;
+    sorted.forEach((mesh, i) => {
+      const isLeader = mode === 'dedication' && i === sorted.length - 1;
+      const lift     = isLeader ? 2.2 : 0;
+      const newY     = yOff + lift;
+
+      gsap.to(mesh.position, {y: newY, duration: 0.75, ease: 'back.out(1.3)', delay: i * 0.022});
+      mesh.userData.baseY = newY + PIECE_H / 2;
+
+      if (mesh.userData.mat) {
+        mesh.userData.mat.emissiveIntensity = isLeader ? 0.65 : 0.08;
+        // Slight colour tint on leader to make them pop
+        if (isLeader) {
+          mesh.userData.mat.color.multiplyScalar(1.0); // keep original colour
+          gsap.to(mesh.userData.mat, {emissiveIntensity: 0.65, duration: 0.5});
+        }
+      }
+
+      yOff += PIECE_H + COIN_GAP;
+    });
+  });
+}
+
+// ─── PERSON PANEL ─────────────────────────────────────────────────────────────
+const FLOW_COL_LABEL = {
+  'Neuroscience, Vision Research IISC':'Foundation','Research/Exploration - HW':'Foundation','Research/Exploration - SW':'Foundation',
+  'DevOps':'Infrastructure','Code Refactoring':'Infrastructure',
+  'SW Tools':'Tooling','HW Tools':'Tooling',
+  'Robotics Research':'Research',
+  'CLX':'Core Platform',
+  'CyRo':'Products','CyNoid':'Products',
+  'Audi(Door Assembly)':'Solutions','Lam Research (QC Cup Assembly)':'Solutions',
+  'AMAT -1 (Kitting)':'Solutions','AMAT -2 (Frame Handling)':'Solutions',
+  'Schneider Electric - India':'Solutions','Hyundai':'Solutions',
+};
+
+window.closePersonPanel = function() {
+  document.getElementById('person-panel').classList.remove('open');
+  resetFlowHighlight();
+};
+
+function highlightFlowPerson(personName) {
+  const person = PEOPLE.find(p => p.name === personName);
+  if (!person) return;
+  const personProjs = new Set(Object.keys(person.allocs).filter(k => (person.allocs[k] || 0) > 0));
+  flowMeshes.forEach(mesh => {
+    const ud = mesh.userData;
+    if (!ud.mat) return;
+    const mine = ud.person && ud.person.name === personName;
+    ud.mat.emissiveIntensity = mine ? 0.5 : 0.01;
+    ud.mat.transparent = !mine;
+    ud.mat.opacity = mine ? 1.0 : 0.07;
+  });
+  (window._flowArcs || []).forEach(arc => {
+    const linked = personProjs.has(arc.userData.srcKey) || personProjs.has(arc.userData.tgtKey);
+    arc.material.opacity = linked ? 0.95 : 0.06;
+  });
+}
+
+function resetFlowHighlight() {
+  flowMeshes.forEach(mesh => {
+    const ud = mesh.userData;
+    if (!ud.mat) return;
+    ud.mat.emissiveIntensity = 0.08;
+    ud.mat.transparent = false;
+    ud.mat.opacity = 1.0;
+  });
+  (window._flowArcs || []).forEach(arc => {
+    arc.material.opacity = arc.userData.baseOpacity || 0.55;
+  });
+}
+
+function openPersonPanel(person) {
+  const entries = Object.entries(person.allocs).sort((a, b) => b[1] - a[1]);
+  const totalFTE = entries.reduce((s, [, v]) => s + v, 0) / 100;
+  const levelColor = LEVEL_COLOR_HEX[person.level] || '#60a5fa';
+
+  let projsHTML = '';
+  entries.forEach(([key, pct]) => {
+    const proj = PROJECTS.find(p => p.key === key);
+    const label = proj ? proj.label : key.slice(0, 16);
+    const color = proj ? proj.color : '#64748b';
+    const stage = FLOW_COL_LABEL[key] || '';
+    projsHTML += `
+      <div class="perp-proj" onclick="openProjectPanel('${key.replace(/'/g,"\\'")}')">
+        <div class="perp-proj-dot" style="background:${color}"></div>
+        <div style="flex:1;min-width:0">
+          <div class="perp-proj-name">${label}</div>
+          ${stage ? `<div class="perp-proj-col">${stage}</div>` : ''}
+        </div>
+        <div class="pp-alloc">
+          <div class="pp-bar"><div class="pp-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <div class="pp-pct">${pct}%</div>
+        </div>
+      </div>`;
+  });
+
+  const panel = document.getElementById('person-panel');
+  panel.innerHTML = `
+    <div class="perp-header">
+      <div>
+        <div class="perp-name">${person.name}</div>
+        <div class="perp-level" style="color:${levelColor}">${person.level}</div>
+        <div class="perp-tenure">${person.cynlr}y at CynLr · ${person.exp}y total</div>
+      </div>
+      <button class="pp-close" onclick="closePersonPanel()">×</button>
+    </div>
+    <div class="pp-fte"><strong>${totalFTE.toFixed(1)} FTE</strong> &nbsp;·&nbsp; ${entries.length} projects</div>
+    <div class="pp-section-title">CONTRIBUTIONS</div>
+    ${projsHTML}
+    ${person.skills.length ? `<div class="pp-section-title">SKILLS</div><div class="pp-skills">${person.skills.map(s => '<span class="pp-skill">'+s+'</span>').join('')}</div>` : ''}
+  `;
+  panel.classList.add('open');
+  highlightFlowPerson(person.name);
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#project-panel') || e.target.closest('#person-panel')) return;
+
+  if (currentView === 'radar') {
+    raycaster.setFromCamera(mouse, camera);
+    const poleHits = raycaster.intersectObjects(window._radarClickable || []);
+    if (poleHits.length > 0) { selectRadarPole(poleHits[0].object.userData.projKey); return; }
+    const personHits = raycaster.intersectObjects(radarMeshes);
+    if (personHits.length > 0) return;
+    resetRadarHighlight(); closeProjectPanel(); return;
+  }
+
+  if (currentView === 'flow') {
+    raycaster.setFromCamera(mouse, camera);
+    // Person hex click → person panel (left) + project panel (right)
+    const personHits = raycaster.intersectObjects(flowMeshes);
+    if (personHits.length > 0) {
+      const ud = personHits[0].object.userData;
+      if (ud.person) openPersonPanel(ud.person);
+      if (ud.projKey) openProjectPanel(ud.projKey);
+      return;
+    }
+    // Ring click → project panel only
+    const visRings = (window._flowRings || []).filter(r => r.parent && r.parent.visible);
+    const ringHits = raycaster.intersectObjects(visRings);
+    if (ringHits.length > 0) {
+      window.closePersonPanel();
+      openProjectPanel(ringHits[0].object.userData.projKey);
+      return;
+    }
+    window.closePersonPanel(); closeProjectPanel(); resetFlowHighlight(); return;
+  }
+
+  if (currentView !== 'projects') return;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(activeMeshes);
+  if (hits.length > 0) {
+    const ud = hits[0].object.userData;
+    if (ud && ud.projKey) openProjectPanel(ud.projKey);
+  } else {
+    closeProjectPanel();
+  }
+});
+
+// ─── HOVER / TOOLTIP ──────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(-9,-9);
+const tooltip = document.getElementById('tooltip');
+let hoveredMeshes = new Set();
+
+function formatAllocs(person) {
+  const entries = Object.entries(person.allocs).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) return 'Unallocated';
+  return entries.slice(0,4).map(([k,v]) => {
+    const proj = PROJECTS.find(p => p.key === k);
+    const label = proj ? proj.label : k.slice(0,12);
+    return `<span style="color:${proj?.color||'#94a3b8'}">${label}</span> ${v}%`;
+  }).join(' · ');
+}
+
+document.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -((e.clientY / window.innerHeight) * 2 - 1);
+
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(activeMeshes);
+
+  // Unhover previous
+  hoveredMeshes.forEach(mesh => {
+    if (!hits.find(h => h.object === mesh)) {
+      const ud = mesh.userData;
+      if (ud && ud.mat) ud.mat.emissiveIntensity = 0.08;
+      gsap.to(mesh.position, {y: ud.baseY, duration:0.3, ease:'power2.out'});
+      hoveredMeshes.delete(mesh);
+    }
+  });
+
+  if (hits.length > 0) {
+    const mesh = hits[0].object;
+    const ud = mesh.userData;
+    if (ud && ud.person) {
+      hoveredMeshes.add(mesh);
+      if (ud.mat) ud.mat.emissiveIntensity = 0.4;
+      gsap.to(mesh.position, {y: ud.baseY + 0.18, duration:0.3, ease:'power2.out'});
+
+      const p = ud.person;
+      const pp = primaryProject(p);
+      const ppData = PROJECTS.find(pr => pr.key === pp);
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 16) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+      tooltip.innerHTML = `
+        <div class="tt-name">${p.name}</div>
+        <div class="tt-level" style="color:${LEVEL_COLOR_HEX[p.level]||'#a78bfa'}">${p.level}</div>
+        <div class="tt-exp">${p.exp}y total · ${p.cynlr}y CynLr</div>
+        <div class="tt-projs" style="margin-top:5px">${formatAllocs(p)}</div>
+        ${p.skills.length ? `<div style="color:#475569;font-size:10px;margin-top:4px">${p.skills.slice(0,4).join(' · ')}</div>` : ''}
+      `;
+    }
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+
+// ─── ANIMATION LOOP ───────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Orbiting lights
+  orbitLights.forEach(({light, phase, r, speed}) => {
+    light.position.set(
+      Math.cos(t * speed + phase) * r,
+      4 + Math.sin(t * speed * 0.7 + phase) * 2,
+      Math.sin(t * speed + phase) * r
+    );
+  });
+
+  // Drift the separation light slowly across the scene
+  sepLight.position.set(Math.sin(t * 0.18) * 30, 0.6, Math.cos(t * 0.13) * 30);
+  sepLight2.position.set(Math.cos(t * 0.21) * 25, 0.6, Math.sin(t * 0.17) * 25);
+
+  // Floating animation for non-hovered meshes
+  activeMeshes.forEach(mesh => {
+    const ud = mesh.userData;
+    if (!hoveredMeshes.has(mesh)) {
+      mesh.position.y = ud.baseY + Math.sin(t * 0.6 + ud.floatPhase) * 0.025;
+    }
+  });
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// ─── RESIZE ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
