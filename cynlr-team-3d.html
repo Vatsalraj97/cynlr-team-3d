@@ -688,6 +688,12 @@ function buildProjectClusters() {
           };
           projectMeshes.push(mesh);
           towerGroup.add(mesh);
+
+          // Name tag beside the coin, at coin height, billboarding toward camera
+          const nt = makePersonNameTag(person);
+          nt.position.set(xOff + SUB_R + 0.9, yOff + PIECE_H / 2, 0);
+          towerGroup.add(nt);
+
           yOff += PIECE_H + COIN_GAP;
         });
 
@@ -699,13 +705,13 @@ function buildProjectClusters() {
         maxHeight = Math.max(maxHeight, yOff);
       });
 
-      // Project label above tallest sub-stack
+      // Project label grounded at base, in front of the ring
+      const ringR = clusterW / 2 + SUB_R + 0.7;
       const label = makeClusterLabel(proj, totalMembers);
-      label.position.set(0, maxHeight + 4.5, 0);
+      label.position.set(0, 1.0, ringR + 1.8);
       towerGroup.add(label);
 
       // Wide ground ring encompassing all sub-stacks
-      const ringR = clusterW / 2 + SUB_R + 0.7;
       const borderRing = new THREE.Mesh(
         new THREE.TorusGeometry(ringR, 0.05, 4, 8),
         new THREE.MeshStandardMaterial({color: proj.color, emissive: proj.color, emissiveIntensity: 0.5, transparent: true, opacity: 0.6})
@@ -974,11 +980,18 @@ function buildFlowView() {
         mesh.userData = {person, projKey, baseY: yOff + PIECE_H / 2, floatPhase: Math.random() * Math.PI * 2, mat};
         flowMeshes.push(mesh);
         tg.add(mesh);
+
+        // Name tag beside each coin, at coin height
+        const nt = makePersonNameTag(person);
+        nt.position.set(HEX_R + 1.1, yOff + PIECE_H / 2, 0);
+        tg.add(nt);
+
         yOff += PIECE_H + COIN_GAP;
       });
 
+      // Project label grounded at base, in front of ring
       const tLbl = makeClusterLabel(proj, members.length);
-      tLbl.position.set(0, yOff + 2.2, 0);
+      tLbl.position.set(0, 1.0, HEX_R + 2.8);
       tg.add(tLbl);
 
       // Clickable ground ring — opens project panel
