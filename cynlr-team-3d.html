@@ -518,9 +518,47 @@ function hexTilePos(n, spc) {
   });
 }
 
+// Allocation bands: Core ≥50%, Active 20-49%, Support <20%
+const ALLOC_BANDS = [
+  { key: 'core',   label: 'Core',    min: 50,  color: '#7dd3fc' },
+  { key: 'active', label: 'Active',  min: 20,  color: '#86efac' },
+  { key: 'light',  label: 'Support', min: 0,   color: '#94a3b8' },
+];
+function getAllocBand(pct) {
+  if (pct >= 50) return 'core';
+  if (pct >= 20) return 'active';
+  return 'light';
+}
+
+function makeBandLabel(band, count) {
+  const W = 200, H = 56;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(3,8,20,0.78)';
+  roundRect(ctx, 0, 0, W, H, 8);
+  ctx.fill();
+  ctx.strokeStyle = band.color;
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 0, 0, W, H, 8);
+  ctx.stroke();
+  ctx.font = 'bold 22px Segoe UI';
+  ctx.fillStyle = band.color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(band.label + ' · ' + count, W / 2, H / 2);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(W / 22, H / 22, 1);
+  return sp;
+}
+
 function buildProjectClusters() {
-  const TOWER_SPC = HEX_R * 2 + 0.8; // tight hex packing — just a small gap between towers
-  const GROUP_SEP = 55; // z-distance between type zones
+  const SUB_R    = HEX_R * 0.72;          // coin radius inside a sub-stack
+  const SUB_SPC  = SUB_R * 2 + 1.0;       // center-to-center gap between sub-stacks
+  const TOWER_SPC = SUB_SPC * 3 + 5;      // center-to-center between project clusters
+  const GROUP_SEP = 70;
 
   const typeOrder = ['external', 'internal-product', 'internal-support'];
   const typeZCenter = { 'external': -GROUP_SEP, 'internal-product': 0, 'internal-support': GROUP_SEP };
@@ -539,7 +577,6 @@ function buildProjectClusters() {
     const groupZ = typeZCenter[type];
     const tilePositions = hexTilePos(projs.length, TOWER_SPC);
 
-    // Section label — find the front-most tile's z and place label ahead of it
     const frontZ = Math.min(...tilePositions.map(p => p.z));
     const sectionSprite = makeSectionLabel(typeLabel[type].text, typeLabel[type].color, typeLabel[type].border);
     sectionSprite.position.set(0, 9, groupZ + frontZ - TOWER_SPC * 1.1);
@@ -552,55 +589,80 @@ function buildProjectClusters() {
       const {x: wx, z: wz} = tilePositions[pi];
       const finalX = wx, finalZ = groupZ + wz;
 
-    // Sort members by allocation desc so largest contributors sit first
-    const members = PEOPLE
-      .filter(p => (p.allocs[proj.key] || 0) > 0)
-      .map(p => ({person: p, pct: p.allocs[proj.key]}))
-      .sort((a, b) => b.pct - a.pct);
+      // Split members into bands
+      const bandBuckets = { core: [], active: [], light: [] };
+      PEOPLE
+        .filter(p => (p.allocs[proj.key] || 0) > 0)
+        .forEach(p => bandBuckets[getAllocBand(p.allocs[proj.key])].push(p));
 
-    const towerGroup = new THREE.Group();
-    towerGroup.position.set(finalX, 0, finalZ);
-    towerGroup.visible = false;
-    scene.add(towerGroup);
-    projectClusterGroups[proj.key] = towerGroup;
+      // Only keep non-empty bands, ordered Core → Active → Support (left to right)
+      const activeBands = ALLOC_BANDS.filter(b => bandBuckets[b.key].length > 0);
+      const totalMembers = activeBands.reduce((s, b) => s + bandBuckets[b.key].length, 0);
 
-    let yOff = 0;
+      // Center sub-stacks around origin (so project label sits above center)
+      const clusterW = (activeBands.length - 1) * SUB_SPC;
+      const bandX = {};
+      activeBands.forEach((b, bi) => { bandX[b.key] = -clusterW / 2 + bi * SUB_SPC; });
 
-    members.forEach(({person}) => {
-      const color = LEVEL_COLOR[person.level] || 0x60a5fa;
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        metalness: 0.35,
-        roughness: 0.25,
-        emissive: color,
-        emissiveIntensity: 0.08
+      const towerGroup = new THREE.Group();
+      towerGroup.position.set(finalX, 0, finalZ);
+      towerGroup.visible = false;
+      scene.add(towerGroup);
+      projectClusterGroups[proj.key] = towerGroup;
+
+      let maxHeight = 0;
+
+      activeBands.forEach(band => {
+        const xOff = bandX[band.key];
+        // Sort within band: largest alloc on top
+        const sorted = bandBuckets[band.key].sort((a, b) =>
+          (a.allocs[proj.key] || 0) - (b.allocs[proj.key] || 0) // ascending → biggest on top
+        );
+        let yOff = 0;
+        sorted.forEach(person => {
+          const color = LEVEL_COLOR[person.level] || 0x60a5fa;
+          const mat = new THREE.MeshStandardMaterial({
+            color, metalness: 0.35, roughness: 0.25,
+            emissive: color, emissiveIntensity: 0.08
+          });
+          const geom = makeLayerGeom(SUB_R, 6, PIECE_H);
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.set(xOff, yOff, 0);
+          mesh.userData = {
+            person, projKey: proj.key, band: band.key,
+            subX: xOff, baseY: yOff + PIECE_H / 2,
+            floatPhase: Math.random() * Math.PI * 2, mat
+          };
+          projectMeshes.push(mesh);
+          towerGroup.add(mesh);
+          yOff += PIECE_H + COIN_GAP;
+        });
+
+        // Band label above sub-stack
+        const bl = makeBandLabel(band, sorted.length);
+        bl.position.set(xOff, yOff + 1.4, 0);
+        towerGroup.add(bl);
+
+        maxHeight = Math.max(maxHeight, yOff);
       });
 
-      const geom = makeLayerGeom(HEX_R, 6, PIECE_H);
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.y = yOff;
-      mesh.userData = {person, projKey: proj.key, baseY: yOff + PIECE_H / 2, floatPhase: Math.random() * Math.PI * 2, mat};
-      projectMeshes.push(mesh);
-      towerGroup.add(mesh);
-      yOff += PIECE_H + COIN_GAP;
+      // Project label above tallest sub-stack
+      const label = makeClusterLabel(proj, totalMembers);
+      label.position.set(0, maxHeight + 4.5, 0);
+      towerGroup.add(label);
+
+      // Wide ground ring encompassing all sub-stacks
+      const ringR = clusterW / 2 + SUB_R + 0.7;
+      const borderRing = new THREE.Mesh(
+        new THREE.TorusGeometry(ringR, 0.05, 4, 8),
+        new THREE.MeshStandardMaterial({color: proj.color, emissive: proj.color, emissiveIntensity: 0.5, transparent: true, opacity: 0.6})
+      );
+      borderRing.rotation.x = Math.PI / 2;
+      borderRing.position.y = 0.01;
+      towerGroup.add(borderRing);
     });
-
-    const towerTop = yOff;
-    const label = makeClusterLabel(proj, members.length);
-    label.position.set(0, towerTop + 2.2, 0);
-    towerGroup.add(label);
-
-    // Ground ring in project color
-    const borderRing = new THREE.Mesh(
-      new THREE.TorusGeometry(HEX_R + 0.35, 0.04, 4, 6),
-      new THREE.MeshStandardMaterial({color: proj.color, emissive: proj.color, emissiveIntensity: 0.5, transparent: true, opacity: 0.6})
-    );
-    borderRing.rotation.x = Math.PI / 2;
-    borderRing.position.y = 0.01;
-    towerGroup.add(borderRing);
-    }); // end projs.forEach
-  }); // end typeOrder.forEach
+  });
 }
 
 // ─── LAYOUTS ──────────────────────────────────────────────────────────────────
@@ -1110,7 +1172,7 @@ window.switchView = function(view) {
     Object.values(projectClusterGroups).forEach(g => g.visible = true);
     (window._sectionLabels || []).forEach(s => s.visible = true);
     activeMeshes = projectMeshes;
-    gsap.to(camera.position, {x:0, y:130, z:160, duration:1.8, ease:'power2.inOut'});
+    gsap.to(camera.position, {x:0, y:180, z:220, duration:1.8, ease:'power2.inOut'});
     gsap.to(controls.target, {x:0, y:4, z:0, duration:1.8, ease:'power2.inOut'});
 
   } else if (view === 'hierarchy') {
@@ -1272,19 +1334,24 @@ window.toggleStackMode = function(isDedication) {
 };
 
 function applyStackMode(mode, meshList) {
-  // Group meshes by projKey — one coin per person per project
-  const byProj = {};
+  // Group by projKey + band (sub-stack) so sorting is contained within each column
+  const bySubStack = {};
   meshList.forEach(m => {
     const pk = m.userData.projKey;
     if (!pk) return;
-    if (!byProj[pk]) byProj[pk] = [];
-    byProj[pk].push(m);
+    const bk = m.userData.band || 'default';
+    const key = pk + '::' + bk;
+    if (!bySubStack[key]) bySubStack[key] = [];
+    bySubStack[key].push(m);
   });
 
-  Object.entries(byProj).forEach(([projKey, meshes]) => {
+  Object.entries(bySubStack).forEach(([, meshes]) => {
+    const projKey = meshes[0].userData.projKey;
+    const xOff = meshes[0].userData.subX !== undefined ? meshes[0].userData.subX : 0;
+
     let sorted;
     if (mode === 'dedication') {
-      // Sort ascending → highest dedication ends up on TOP (last = highest Y)
+      // Sort ascending → highest dedication floats to top
       sorted = [...meshes].sort((a, b) => {
         const pa = a.userData.person, pb = b.userData.person;
         const totA = Object.values(pa.allocs).reduce((s, v) => s + v, 0) || 100;
@@ -1292,30 +1359,21 @@ function applyStackMode(mode, meshList) {
         return ((pa.allocs[projKey] || 0) / totA) - ((pb.allocs[projKey] || 0) / totB);
       });
     } else {
-      // Contribution: descending by raw alloc — current default
+      // Contribution: ascending so largest alloc sits on top (matches build-time order)
       sorted = [...meshes].sort((a, b) =>
-        (b.userData.person.allocs[projKey] || 0) - (a.userData.person.allocs[projKey] || 0)
+        (a.userData.person.allocs[projKey] || 0) - (b.userData.person.allocs[projKey] || 0)
       );
     }
 
     let yOff = 0;
     sorted.forEach((mesh, i) => {
       const isLeader = mode === 'dedication' && i === sorted.length - 1;
-      const lift     = isLeader ? 2.2 : 0;
-      const newY     = yOff + lift;
+      const lift = isLeader ? 2.2 : 0;
+      const newY = yOff + lift;
 
-      gsap.to(mesh.position, {y: newY, duration: 0.75, ease: 'back.out(1.3)', delay: i * 0.022});
+      gsap.to(mesh.position, {x: xOff, y: newY, duration: 0.75, ease: 'back.out(1.3)', delay: i * 0.022});
       mesh.userData.baseY = newY + PIECE_H / 2;
-
-      if (mesh.userData.mat) {
-        mesh.userData.mat.emissiveIntensity = isLeader ? 0.65 : 0.08;
-        // Slight colour tint on leader to make them pop
-        if (isLeader) {
-          mesh.userData.mat.color.multiplyScalar(1.0); // keep original colour
-          gsap.to(mesh.userData.mat, {emissiveIntensity: 0.65, duration: 0.5});
-        }
-      }
-
+      if (mesh.userData.mat) mesh.userData.mat.emissiveIntensity = isLeader ? 0.65 : 0.08;
       yOff += PIECE_H + COIN_GAP;
     });
   });
