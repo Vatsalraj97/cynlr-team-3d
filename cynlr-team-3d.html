@@ -22,16 +22,53 @@ canvas{display:block}
 #tooltip .tt-projs{color:#e2e8f0;font-size:11px;margin-top:4px}
 #hint{position:fixed;bottom:14px;right:14px;font-size:11px;color:#334155;pointer-events:none}
 
-/* ── Stack mode toggle ── */
-#mode-toggle{display:none;align-items:center;gap:8px;margin-left:8px;padding-left:12px;border-left:1px solid rgba(255,255,255,0.08)}
-#mode-toggle span{font-size:11px;color:#475569;white-space:nowrap}
-#mode-toggle span.active-label{color:#7dd3fc}
-.tgl-wrap{position:relative;width:36px;height:18px;cursor:pointer}
+/* ── Settings button ── */
+#settings-btn{margin-left:auto;padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:#94a3b8;font-size:13px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px}
+#settings-btn:hover,#settings-btn.active{background:rgba(125,211,252,0.12);border-color:#7dd3fc;color:#7dd3fc}
+
+/* ── Settings panel ── */
+#settings-panel{position:fixed;top:50px;right:-300px;width:270px;height:calc(100vh - 50px);background:rgba(3,8,20,0.97);border-left:1px solid rgba(255,255,255,0.07);overflow-y:auto;transition:right 0.35s cubic-bezier(0.25,0.46,0.45,0.94);z-index:20;backdrop-filter:blur(16px)}
+#settings-panel.open{right:0}
+.sp-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.sp-head span{font-size:12px;font-weight:600;letter-spacing:0.08em;color:#7dd3fc;text-transform:uppercase}
+.sp-close{background:none;border:none;color:#475569;font-size:18px;cursor:pointer;line-height:1;padding:0}
+.sp-close:hover{color:#e2e8f0}
+.sp-section{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.sp-section-title{font-size:10px;font-weight:600;letter-spacing:0.1em;color:#334155;text-transform:uppercase;margin-bottom:10px}
+.sp-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sp-row:last-child{margin-bottom:0}
+.sp-label{font-size:11px;color:#64748b}
+.sp-label.dim{color:#334155;font-style:italic}
+.sp-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.05);color:#334155;margin-left:4px}
+
+/* Toggle switch (shared) */
+.tgl-wrap{position:relative;width:36px;height:18px;cursor:pointer;flex-shrink:0}
 .tgl-wrap input{opacity:0;width:0;height:0;position:absolute}
 .tgl-track{position:absolute;inset:0;background:rgba(255,255,255,0.08);border-radius:9px;transition:background 0.2s}
 .tgl-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#475569;border-radius:50%;transition:transform 0.2s,background 0.2s}
 .tgl-wrap input:checked ~ .tgl-track{background:rgba(125,211,252,0.25)}
 .tgl-wrap input:checked ~ .tgl-thumb{transform:translateX(18px);background:#7dd3fc}
+.tgl-wrap.disabled{opacity:0.3;pointer-events:none}
+
+/* Slider */
+.sp-slider-row{margin-bottom:12px}
+.sp-slider-row:last-child{margin-bottom:0}
+.sp-slider-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.sp-slider-label span{font-size:11px;color:#64748b}
+.sp-slider-label .sp-val{font-size:10px;color:#475569;font-variant-numeric:tabular-nums}
+input[type=range].sp-range{-webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);outline:none;cursor:pointer}
+input[type=range].sp-range::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#7dd3fc;cursor:pointer;transition:transform 0.15s}
+input[type=range].sp-range::-webkit-slider-thumb:hover{transform:scale(1.3)}
+
+/* Reset button */
+.sp-btn{width:100%;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#94a3b8;font-size:11px;cursor:pointer;transition:all 0.2s;margin-top:4px}
+.sp-btn:hover{background:rgba(125,211,252,0.1);border-color:#7dd3fc;color:#7dd3fc}
+
+/* Stack mode row inside panel */
+.sp-stack-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.sp-stack-labels{display:flex;align-items:center;gap:8px;font-size:11px}
+.sp-stack-labels span{color:#475569;transition:color 0.2s}
+.sp-stack-labels span.active-label{color:#7dd3fc}
 
 /* ── Project detail panel ── */
 #project-panel{position:fixed;top:50px;right:-360px;width:330px;max-height:calc(100vh - 60px);background:rgba(3,8,20,0.96);border:1px solid rgba(255,255,255,0.08);border-right:none;border-radius:12px 0 0 12px;overflow-y:auto;transition:right 0.38s cubic-bezier(0.25,0.46,0.45,0.94);z-index:15;backdrop-filter:blur(14px)}
@@ -85,15 +122,7 @@ canvas{display:block}
   <button class="tab" id="btn-hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
   <button class="tab" id="btn-flow" onclick="switchView('flow')">Process Flow</button>
   <button class="tab" id="btn-radar" onclick="switchView('radar')">Distribution</button>
-  <div id="mode-toggle">
-    <span id="lbl-contribution" class="active-label">Contribution</span>
-    <label class="tgl-wrap">
-      <input type="checkbox" id="tgl-input" onchange="toggleStackMode(this.checked)">
-      <div class="tgl-track"></div>
-      <div class="tgl-thumb"></div>
-    </label>
-    <span id="lbl-dedication">Dedication</span>
-  </div>
+  <button id="settings-btn" onclick="toggleSettings()">⚙ Settings</button>
   <div id="legend">
     <span><b style="background:#fbbf24"></b>Intern</span>
     <span><b style="background:#60a5fa"></b>Eng 1-3</span>
@@ -107,6 +136,107 @@ canvas{display:block}
 <div id="person-panel"></div>
 <div id="project-panel"></div>
 <div id="hint">Drag to orbit · Scroll to zoom · Hover to inspect · Click tower to inspect</div>
+
+<div id="settings-panel">
+  <div class="sp-head">
+    <span>Settings</span>
+    <button class="sp-close" onclick="toggleSettings()">×</button>
+  </div>
+
+  <!-- STACK MODE -->
+  <div class="sp-section">
+    <div class="sp-section-title">Stack Mode</div>
+    <div class="sp-stack-row">
+      <div class="sp-stack-labels">
+        <span id="lbl-contribution" class="active-label">Contribution</span>
+        <label class="tgl-wrap">
+          <input type="checkbox" id="tgl-input" onchange="toggleStackMode(this.checked)">
+          <div class="tgl-track"></div>
+          <div class="tgl-thumb"></div>
+        </label>
+        <span id="lbl-dedication">Dedication</span>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#334155;margin-top:2px">Active in Project Towers &amp; Process Flow</div>
+  </div>
+
+  <!-- PLACEHOLDER TOGGLES -->
+  <div class="sp-section">
+    <div class="sp-section-title">Upcoming Features</div>
+    <div class="sp-row">
+      <span class="sp-label dim">Skills Overlay <span class="sp-badge">Soon</span></span>
+      <label class="tgl-wrap disabled"><input type="checkbox" disabled><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label dim">Team Clusters <span class="sp-badge">Soon</span></span>
+      <label class="tgl-wrap disabled"><input type="checkbox" disabled><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label dim">Timeline Mode <span class="sp-badge">Soon</span></span>
+      <label class="tgl-wrap disabled"><input type="checkbox" disabled><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+  </div>
+
+  <!-- SCENE -->
+  <div class="sp-section">
+    <div class="sp-section-title">Scene</div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Brightness</span><span class="sp-val" id="val-brightness">1.0</span></div>
+      <input type="range" class="sp-range" id="sl-brightness" min="0.2" max="3" step="0.05" value="1.0" oninput="onBrightness(this)">
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Glow Intensity</span><span class="sp-val" id="val-glow">1.0</span></div>
+      <input type="range" class="sp-range" id="sl-glow" min="0" max="3" step="0.05" value="1.0" oninput="onGlow(this)">
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Ambient Light</span><span class="sp-val" id="val-ambient">0.6</span></div>
+      <input type="range" class="sp-range" id="sl-ambient" min="0" max="2" step="0.05" value="0.6" oninput="onAmbient(this)">
+    </div>
+  </div>
+
+  <!-- CAMERA -->
+  <div class="sp-section">
+    <div class="sp-section-title">Camera</div>
+    <div class="sp-row">
+      <span class="sp-label">Auto-Rotate</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-autorotate" onchange="onAutoRotate(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Rotate Speed</span><span class="sp-val" id="val-rotatespeed">1.0</span></div>
+      <input type="range" class="sp-range" id="sl-rotatespeed" min="0.1" max="5" step="0.1" value="1.0" oninput="onRotateSpeed(this)">
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Zoom Speed</span><span class="sp-val" id="val-zoomspeed">1.2</span></div>
+      <input type="range" class="sp-range" id="sl-zoomspeed" min="0.2" max="4" step="0.1" value="1.2" oninput="onZoomSpeed(this)">
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Field of View</span><span class="sp-val" id="val-fov">55°</span></div>
+      <input type="range" class="sp-range" id="sl-fov" min="25" max="100" step="1" value="55" oninput="onFov(this)">
+    </div>
+    <button class="sp-btn" onclick="resetCamera()">↺ Reset Camera</button>
+  </div>
+
+  <!-- NAVIGATION -->
+  <div class="sp-section">
+    <div class="sp-section-title">Navigation</div>
+    <div class="sp-row">
+      <span class="sp-label">Enable Pan</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-pan" checked onchange="onPan(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label">Invert Scroll</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-invertzoom" onchange="onInvertZoom(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Orbit Damping</span><span class="sp-val" id="val-damping">0.08</span></div>
+      <input type="range" class="sp-range" id="sl-damping" min="0.01" max="0.5" step="0.01" value="0.08" oninput="onDamping(this)">
+    </div>
+    <div class="sp-slider-row">
+      <div class="sp-slider-label"><span>Pan Speed</span><span class="sp-val" id="val-panspeed">1.0</span></div>
+      <input type="range" class="sp-range" id="sl-panspeed" min="0.1" max="3" step="0.1" value="1.0" oninput="onPanSpeed(this)">
+    </div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script type="importmap">
@@ -1203,10 +1333,8 @@ window.switchView = function(view) {
   if (view !== 'projects' && view !== 'flow' && window.closeProjectPanel) window.closeProjectPanel();
   if (view !== 'flow' && window.closePersonPanel) window.closePersonPanel();
 
-  // Show mode toggle only for views that have stacked coins
-  const showToggle = (view === 'projects' || view === 'flow');
-  document.getElementById('mode-toggle').style.display = showToggle ? 'flex' : 'none';
-  if (!showToggle && stackMode === 'dedication') {
+  // Reset stack mode when leaving views where it's meaningful
+  if (view !== 'projects' && view !== 'flow' && stackMode === 'dedication') {
     document.getElementById('tgl-input').checked = false;
     stackMode = 'contribution';
     document.getElementById('lbl-contribution').classList.add('active-label');
@@ -1384,6 +1512,98 @@ function selectRadarPole(projKey) {
     }
   });
 }
+
+// ─── SETTINGS PANEL ──────────────────────────────────────────────────────────
+let _settingsOpen = false;
+let _glowScale    = 1.0;
+let _invertZoom   = false;
+
+window.toggleSettings = function() {
+  _settingsOpen = !_settingsOpen;
+  document.getElementById('settings-panel').classList.toggle('open', _settingsOpen);
+  document.getElementById('settings-btn').classList.toggle('active', _settingsOpen);
+};
+
+// Brightness — renderer tone-mapping exposure
+window.onBrightness = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-brightness').textContent = v.toFixed(2);
+  renderer.toneMappingExposure = v;
+};
+
+// Glow — scale emissiveIntensity on every material we track
+window.onGlow = function(el) {
+  _glowScale = parseFloat(el.value);
+  document.getElementById('val-glow').textContent = _glowScale.toFixed(2);
+  const allMeshes = [...gridMeshes, ...projectMeshes, ...hierarchyMeshes, ...flowMeshes, ...radarMeshes];
+  allMeshes.forEach(m => {
+    if (m.userData.mat) m.userData.mat.emissiveIntensity = 0.08 * _glowScale;
+  });
+};
+
+// Ambient light (first ambient in scene)
+window.onAmbient = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-ambient').textContent = v.toFixed(2);
+  scene.children.filter(c => c.isAmbientLight).forEach(l => { l.intensity = v; });
+};
+
+// Auto-rotate
+window.onAutoRotate = function(checked) {
+  controls.autoRotate = checked;
+};
+
+// Rotate speed
+window.onRotateSpeed = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-rotatespeed').textContent = v.toFixed(1);
+  controls.autoRotateSpeed = v;
+};
+
+// Zoom speed
+window.onZoomSpeed = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-zoomspeed').textContent = v.toFixed(1);
+  controls.zoomSpeed = v;
+};
+
+// Field of view
+window.onFov = function(el) {
+  const v = parseInt(el.value);
+  document.getElementById('val-fov').textContent = v + '°';
+  camera.fov = v;
+  camera.updateProjectionMatrix();
+};
+
+// Reset camera to current view's home position
+window.resetCamera = function() {
+  switchView(currentView);
+};
+
+// Enable pan
+window.onPan = function(checked) {
+  controls.enablePan = checked;
+};
+
+// Invert scroll
+window.onInvertZoom = function(checked) {
+  _invertZoom = checked;
+  controls.zoomSpeed = checked ? -Math.abs(controls.zoomSpeed) : Math.abs(controls.zoomSpeed);
+};
+
+// Orbit damping
+window.onDamping = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-damping').textContent = v.toFixed(2);
+  controls.dampingFactor = v;
+};
+
+// Pan speed
+window.onPanSpeed = function(el) {
+  const v = parseFloat(el.value);
+  document.getElementById('val-panspeed').textContent = v.toFixed(1);
+  controls.panSpeed = v;
+};
 
 // ─── STACK MODE TOGGLE ───────────────────────────────────────────────────────
 let stackMode = 'contribution';
