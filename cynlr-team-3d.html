@@ -601,52 +601,41 @@ function makePersonNameTag(person) {
 }
 
 function makeClusterLabel(proj, memberCount) {
-  const badge = TYPE_BADGE[proj.type] || TYPE_BADGE['internal-support'];
-  const W = 512, H = 128;
+  const font = 'bold 28px Segoe UI';
+  const scratch = document.createElement('canvas').getContext('2d');
+  scratch.font = font;
+  const tw = scratch.measureText(proj.label).width;
+
+  const PAD = 16;
+  const W = Math.ceil(tw + PAD * 2 + 6);  // +6 for accent bar
+  const H = 44;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
 
   // Background pill
-  ctx.fillStyle = 'rgba(3,8,20,0.82)';
-  roundRect(ctx, 0, 0, W, H, 12);
+  ctx.fillStyle = 'rgba(3,8,20,0.80)';
+  roundRect(ctx, 0, 0, W, H, H / 2);
   ctx.fill();
 
-  // Left accent bar (project color)
+  // Left accent dot in project color
   ctx.fillStyle = proj.color;
-  roundRect(ctx, 0, 0, 8, H, [12, 0, 0, 12]);
+  ctx.beginPath();
+  ctx.arc(H / 2, H / 2, 5, 0, Math.PI * 2);
   ctx.fill();
-
-  // Type badge
-  ctx.fillStyle = badge.bg;
-  roundRect(ctx, 20, 10, 200, 36, 6);
-  ctx.fill();
-  ctx.strokeStyle = badge.border;
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, 20, 10, 200, 36, 6);
-  ctx.stroke();
-  ctx.font = 'bold 17px Segoe UI';
-  ctx.fillStyle = badge.border;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(badge.text, 30, 28);
 
   // Project name
-  ctx.font = 'bold 30px Segoe UI';
-  ctx.fillStyle = '#f1f5f9';
-  ctx.textBaseline = 'top';
-  ctx.fillText(proj.label, 20, 52);
-
-  // Member count
-  ctx.font = '19px Segoe UI';
-  ctx.fillStyle = '#64748b';
-  ctx.textBaseline = 'top';
-  ctx.fillText(memberCount + ' people', 20, 90);
+  ctx.font = font;
+  ctx.fillStyle = '#e2e8f0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(proj.label, H / 2 + 9, H / 2);
 
   const tex = new THREE.CanvasTexture(c);
-  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false});
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true, depthTest: false, opacity: 0.90});
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(W/40, H/40, 1);
+  const worldH = 1.4;
+  sprite.scale.set((W / H) * worldH, worldH, 1);
   return sprite;
 }
 
@@ -818,19 +807,15 @@ function buildProjectClusters() {
           };
           projectMeshes.push(mesh);
           towerGroup.add(mesh);
-
-          // Name tag beside the coin, at coin height, billboarding toward camera
-          const nt = makePersonNameTag(person);
-          nt.position.set(xOff + SUB_R + 0.9, yOff + PIECE_H / 2, 0);
-          towerGroup.add(nt);
-
           yOff += PIECE_H + COIN_GAP;
         });
 
-        // Band label above sub-stack
-        const bl = makeBandLabel(band, sorted.length);
-        bl.position.set(xOff, yOff + 1.4, 0);
-        towerGroup.add(bl);
+        // Minimal band indicator: just a small colored dot + count above the sub-stack
+        const bandCol = new THREE.Color(band.color);
+        const dotMat = new THREE.MeshStandardMaterial({color: bandCol, emissive: bandCol, emissiveIntensity: 1.2, transparent: true, opacity: 0.85});
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), dotMat);
+        dot.position.set(xOff, yOff + 0.6, 0);
+        towerGroup.add(dot);
 
         maxHeight = Math.max(maxHeight, yOff);
       });
