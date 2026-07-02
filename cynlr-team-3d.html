@@ -160,15 +160,23 @@ input[type=range].sp-range::-webkit-slider-thumb:hover{transform:scale(1.3)}
     <div style="font-size:10px;color:#334155;margin-top:2px">Active in Project Towers &amp; Process Flow</div>
   </div>
 
-  <!-- PLACEHOLDER TOGGLES -->
+  <!-- VISIBILITY TOGGLES -->
   <div class="sp-section">
-    <div class="sp-section-title">Upcoming Features</div>
+    <div class="sp-section-title">Visibility</div>
     <div class="sp-row">
-      <span class="sp-label dim">Skills Overlay <span class="sp-badge">Soon</span></span>
-      <label class="tgl-wrap disabled"><input type="checkbox" disabled><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+      <span class="sp-label">Name Tags</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-nametags" checked onchange="toggleNameTags(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
     </div>
     <div class="sp-row">
-      <span class="sp-label dim">Team Clusters <span class="sp-badge">Soon</span></span>
+      <span class="sp-label">Project Labels</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-projlabels" checked onchange="toggleProjLabels(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label">Section Headers</span>
+      <label class="tgl-wrap"><input type="checkbox" id="tgl-sectionhdrs" checked onchange="toggleSectionHeaders(this.checked)"><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label dim">Skills Overlay <span class="sp-badge">Soon</span></span>
       <label class="tgl-wrap disabled"><input type="checkbox" disabled><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
     </div>
     <div class="sp-row">
@@ -482,6 +490,10 @@ const hierarchyMeshes = []; // meshes in hierarchy view
 const flowMeshes = [];      // meshes in flow view
 let activeMeshes = gridMeshes;
 
+// Toggleable label collections
+window._nameTags   = [];   // all person name tag sprites
+window._projLabels = [];   // all project/cluster name plate sprites
+
 const personGroups = {};          // name → group (people grid)
 const projectClusterGroups = {};  // projKey → group (project view)
 const hierarchyGroups = {};       // name_h → group (hierarchy view)
@@ -540,8 +552,9 @@ function addPersonShape(person, parentGroup, lx, lz, meshList) {
 
   // Name tag — billboard sprite at base level, facing camera automatically
   const nameTag = makePersonNameTag(person);
-  nameTag.position.set(0, 0.5, ringR + 0.3);  // just in front of the ring at ground level
+  nameTag.position.set(0, 0.5, ringR + 0.3);
   sub.add(nameTag);
+  window._nameTags.push(nameTag);
 }
 
 function createPersonPrisms(person, x, z) {
@@ -825,6 +838,7 @@ function buildProjectClusters() {
       const label = makeClusterLabel(proj, totalMembers);
       label.position.set(0, 1.0, ringR + 1.8);
       towerGroup.add(label);
+      window._projLabels.push(label);
 
       // Wide ground ring encompassing all sub-stacks
       const borderRing = new THREE.Mesh(
@@ -1100,6 +1114,7 @@ function buildFlowView() {
         const nt = makePersonNameTag(person);
         nt.position.set(HEX_R + 1.1, yOff + PIECE_H / 2, 0);
         tg.add(nt);
+        window._nameTags.push(nt);
 
         yOff += PIECE_H + COIN_GAP;
       });
@@ -1108,6 +1123,7 @@ function buildFlowView() {
       const tLbl = makeClusterLabel(proj, members.length);
       tLbl.position.set(0, 1.0, HEX_R + 2.8);
       tg.add(tLbl);
+      window._projLabels.push(tLbl);
 
       // Clickable ground ring — opens project panel
       const bRing = new THREE.Mesh(
@@ -1223,6 +1239,7 @@ function buildRadarView() {
     lbl.visible = false;
     scene.add(lbl);
     window._radarPoles.push(lbl);
+    window._projLabels.push(lbl);
   });
 
   // Compute each person's weighted centroid position
@@ -1372,6 +1389,9 @@ window.switchView = function(view) {
     Object.values(radarGroups).forEach(g => g.visible = true);
     (window._radarPoles || []).forEach(p => p.visible = true);
     (window._radarLines || []).forEach(l => l.visible = true);
+    // Re-apply label visibility toggles so radar labels respect current settings
+    const showProjLbls = document.getElementById('tgl-projlabels')?.checked !== false;
+    (window._projLabels || []).forEach(s => { s.visible = showProjLbls; });
     activeMeshes = radarMeshes;
     gsap.to(camera.position, {x:0, y:95, z:65, duration:1.8, ease:'power2.inOut'});
     gsap.to(controls.target, {x:0, y:0, z:0, duration:1.8, ease:'power2.inOut'});
@@ -1588,6 +1608,28 @@ window.onPanSpeed = function(el) {
   const v = parseFloat(el.value);
   document.getElementById('val-panspeed').textContent = v.toFixed(1);
   controls.panSpeed = v;
+};
+
+// Visibility toggles
+window.toggleNameTags = function(show) {
+  (window._nameTags || []).forEach(s => { s.visible = show; });
+};
+
+window.toggleProjLabels = function(show) {
+  // Only toggle labels that belong to the active view (check parent visibility)
+  (window._projLabels || []).forEach(s => { s.visible = show; });
+};
+
+window.toggleSectionHeaders = function(show) {
+  (window._sectionLabels || []).forEach(s => { s.visible = show; });
+  // Flow column headers are in _flowLabels (mixed with guide lines — only hide Sprites)
+  (window._flowLabels || []).forEach(obj => {
+    if (obj.isSprite) obj.visible = show;
+  });
+  // Hierarchy level labels are Sprites inside _hierExtras
+  (window._hierExtras || []).forEach(obj => {
+    if (obj.isSprite) obj.visible = show;
+  });
 };
 
 // ─── STACK MODE TOGGLE ───────────────────────────────────────────────────────
