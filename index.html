@@ -156,6 +156,37 @@ input[type=range].sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:
 .sim-alert.info{background:rgba(125,211,252,0.06);border:1px solid rgba(125,211,252,0.15);color:#7dd3fc}
 .sim-alert-icon{font-size:12px;flex-shrink:0}
 .sim-alerts-col{grid-column:1/-1}
+/* Right panel + tabs */
+.sim-right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.sim-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.sim-tab{padding:8px 16px;font-size:11px;color:#475569;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.18s;letter-spacing:0.04em}
+.sim-tab:hover{color:#94a3b8}
+.sim-tab.active{color:#4ade80;border-bottom-color:#4ade80}
+.sim-tab-content{display:none;flex:1;overflow:auto}
+.sim-tab-content.active{display:flex;flex-direction:column}
+#sim-tab-analytics.active{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:14px;padding:14px 20px}
+/* Investment matrix */
+.sim-matrix-table{border-collapse:collapse;font-size:9px;white-space:nowrap}
+.sim-matrix-table th{padding:3px 5px;color:#334155;font-weight:600;text-align:center;position:sticky;top:0;background:#02060f;z-index:2}
+.sim-matrix-table th.row-hdr{position:sticky;left:0;z-index:3;text-align:left;min-width:110px;background:#02060f}
+.sim-matrix-table td{padding:2px 3px;text-align:center;min-width:36px;border:1px solid rgba(255,255,255,0.03)}
+.sim-matrix-table td.row-hdr{position:sticky;left:0;background:#030814;color:#64748b;padding:2px 6px;text-align:left;z-index:1;border-right:1px solid rgba(255,255,255,0.06)}
+.sim-matrix-table tr:hover td{filter:brightness(1.3)}
+/* Equation block */
+.eq-block{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid #4ade80;border-radius:6px;padding:12px 16px;margin-bottom:12px}
+.eq-title{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#334155;margin-bottom:8px;font-weight:700}
+.eq-line{font-size:12px;color:#94a3b8;line-height:2;font-family:'Consolas',monospace}
+.eq-line b{color:#e2e8f0}
+.eq-line em{color:#4ade80;font-style:normal}
+.eq-line s{color:#7dd3fc;text-decoration:none}
+.eq-note{font-size:10px;color:#334155;margin-top:6px;line-height:1.5}
+/* LPP result */
+.lpp-gap-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:10px}
+.lpp-gap-name{width:110px;color:#64748b;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lpp-gap-track{flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;position:relative}
+.lpp-gap-cur{height:100%;background:#1d4ed8;border-radius:3px;position:absolute;top:0;left:0}
+.lpp-gap-opt{height:100%;background:#4ade80;border-radius:3px;position:absolute;top:0;left:0;opacity:0.5}
+.lpp-gap-delta{width:44px;text-align:right;color:#475569;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -216,20 +247,60 @@ input[type=range].sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:
       </div>
     </div>
 
-    <!-- RIGHT: Analytics -->
-    <div class="sim-analytics">
-      <div class="sim-cards" id="sim-cards"></div>
-      <div>
-        <div class="sim-col-title">People — Total Value (V<sub>i</sub>)</div>
-        <div id="sim-people-bars"></div>
+    <!-- RIGHT: Tabbed views -->
+    <div class="sim-right">
+      <div class="sim-tabs">
+        <button class="sim-tab active" onclick="switchSimTab('analytics',this)">Analytics</button>
+        <button class="sim-tab" onclick="switchSimTab('matrix',this)">Investment Matrix</button>
+        <button class="sim-tab" onclick="switchSimTab('optimize',this)">Optimize</button>
+        <button class="sim-tab" onclick="switchSimTab('equations',this)">Equations</button>
       </div>
-      <div>
-        <div class="sim-col-title">Projects — Team Value (P<sub>j</sub>)</div>
-        <div id="sim-proj-bars"></div>
+
+      <!-- ANALYTICS -->
+      <div id="sim-tab-analytics" class="sim-tab-content active sim-analytics">
+        <div class="sim-cards" id="sim-cards"></div>
+        <div>
+          <div class="sim-col-title">People — Total Value (V<sub>i</sub>)</div>
+          <div id="sim-people-bars"></div>
+        </div>
+        <div>
+          <div class="sim-col-title">Projects — Team Value (P<sub>j</sub>)</div>
+          <div id="sim-proj-bars"></div>
+        </div>
+        <div class="sim-alerts-col">
+          <div class="sim-col-title">Alerts</div>
+          <div id="sim-alerts"></div>
+        </div>
       </div>
-      <div class="sim-alerts-col">
-        <div class="sim-col-title">Alerts</div>
-        <div id="sim-alerts"></div>
+
+      <!-- INVESTMENT MATRIX -->
+      <div id="sim-tab-matrix" class="sim-tab-content" style="overflow:auto;padding:12px 16px">
+        <div id="sim-matrix-legend" style="display:flex;gap:16px;align-items:center;margin-bottom:10px;font-size:10px;color:#475569">
+          <span>Cell = C<sub>i,j</sub> = CAP<sub>i</sub> × p<sub>i,j</sub> × W<sub>j</sub> × η</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#1e3a5f;border-radius:2px"></span>0</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#1d4ed8;border-radius:2px"></span>low</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#06b6d4;border-radius:2px"></span>mid</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;background:#4ade80;border-radius:2px"></span>high</span>
+        </div>
+        <div id="sim-matrix"></div>
+      </div>
+
+      <!-- OPTIMIZE -->
+      <div id="sim-tab-optimize" class="sim-tab-content" style="overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:10px;color:#475569;line-height:1.6">
+          Set minimum project values (P<sub>j</sub><sup>min</sup>). The solver will find the optimal allocation p*<sub>i,j</sub> that maximises total team value while meeting all floors.
+        </div>
+        <div>
+          <div class="sim-col-title" style="margin-bottom:8px">Project Floors — P<sub>j</sub><sup>min</sup></div>
+          <div id="sim-floor-sliders"></div>
+        </div>
+        <button class="sim-action-btn primary" style="align-self:flex-start;padding:6px 18px" onclick="runLPP()">▶ Solve LPP</button>
+        <div id="sim-lpp-result"></div>
+      </div>
+
+      <!-- EQUATIONS -->
+      <div id="sim-tab-equations" class="sim-tab-content" style="overflow:auto;padding:16px 20px">
+        <div id="sim-equations"></div>
       </div>
     </div>
   </div>
@@ -2299,7 +2370,260 @@ window.addEventListener('sim-updated', () => {
   if (_simOpen) renderSimAnalytics();
 });
 
-// Init
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchSimTab(name, btn) {
+  document.querySelectorAll('.sim-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sim-tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sim-tab-' + name).classList.add('active');
+  if (name === 'matrix')    renderInvestmentMatrix();
+  if (name === 'optimize')  renderFloorSliders();
+  if (name === 'equations') renderEquations();
+  if (name === 'analytics') renderSimAnalytics();
+}
+
+// ── Investment Matrix ─────────────────────────────────────────────────────────
+function renderInvestmentMatrix() {
+  const activeProjs = PROJECTS.filter(pr => PEOPLE.some(p => (p.allocs[pr.key]||0) > 0));
+  const maxC = Math.max(...PEOPLE.flatMap(p =>
+    activeProjs.map(pr => SIM.out.C[p.name]?.[pr.key] || 0)
+  ));
+
+  function cellColor(c) {
+    if (!c || c < 0.5) return '#0a0f1e';
+    const t = Math.min(1, c / maxC);
+    // Black → dark blue → cyan → green gradient
+    if (t < 0.33) {
+      const s = t / 0.33;
+      return `rgb(${Math.round(30*s)},${Math.round(58*s)},${Math.round(200*s)})`;
+    } else if (t < 0.66) {
+      const s = (t - 0.33) / 0.33;
+      return `rgb(${Math.round(30+s*0)},${Math.round(58+s*125)},${Math.round(200+s*12)})`;
+    } else {
+      const s = (t - 0.66) / 0.34;
+      return `rgb(${Math.round(s*74)},${Math.round(183+s*39)},${Math.round(212-s*84)})`;
+    }
+  }
+
+  const sortedPeople = [...PEOPLE].sort((a,b) => (SIM.out.V[b.name]||0) - (SIM.out.V[a.name]||0));
+
+  let html = '<table class="sim-matrix-table"><thead><tr><th class="row-hdr">Person</th>';
+  activeProjs.forEach(pr => {
+    html += `<th title="${pr.key}" style="color:${pr.color}">${pr.label}</th>`;
+  });
+  html += '<th style="color:#4ade80">V<sub>i</sub></th></tr></thead><tbody>';
+
+  sortedPeople.forEach(p => {
+    const Vi = SIM.out.V[p.name] || 0;
+    const levelColor = {'Principal Engineer':'#e879f9','Senior Engineer':'#f97316','Lead':'#4ade80',
+      'Engineer 3':'#1d4ed8','Engineer 2':'#3b82f6','Engineer 1':'#60a5fa','Engineer Intern':'#93c5fd','Intern':'#fbbf24'};
+    html += `<tr><td class="row-hdr" style="color:${levelColor[p.level]||'#64748b'}">${p.name}</td>`;
+    activeProjs.forEach(pr => {
+      const c = SIM.out.C[p.name]?.[pr.key] || 0;
+      const bg = cellColor(c);
+      const txt = c > 0.5 ? Math.round(c) : '';
+      html += `<td style="background:${bg};color:rgba(255,255,255,0.85)" title="${p.name} → ${pr.label}: C=${c.toFixed(1)}, p=${((p.allocs[pr.key]||0)).toFixed(0)}%">${txt}</td>`;
+    });
+    html += `<td style="color:#4ade80;font-weight:600">${Math.round(Vi)}</td></tr>`;
+  });
+
+  // Project totals row
+  html += '<tr><td class="row-hdr" style="color:#334155;font-style:italic">P<sub>j</sub></td>';
+  activeProjs.forEach(pr => {
+    const Pj = SIM.out.P[pr.key] || 0;
+    html += `<td style="color:${pr.color};font-weight:600;background:rgba(255,255,255,0.02)">${Math.round(Pj)}</td>`;
+  });
+  html += `<td style="color:#4ade80;font-weight:700">${Math.round(Object.values(SIM.out.V).reduce((a,b)=>a+b,0))}</td></tr>`;
+  html += '</tbody></table>';
+
+  document.getElementById('sim-matrix').innerHTML = html;
+}
+
+// ── LPP Equations ─────────────────────────────────────────────────────────────
+function renderEquations() {
+  const n = PEOPLE.length;
+  const m = PROJECTS.filter(pr => PEOPLE.some(p=>(p.allocs[pr.key]||0)>0)).length;
+  const totalV = Math.round(Object.values(SIM.out.V).reduce((a,b)=>a+b,0));
+  const avgUtil = (Object.values(SIM.out.util).reduce((a,b)=>a+b,0)/n*100).toFixed(1);
+
+  document.getElementById('sim-equations').innerHTML = `
+    <div class="eq-block">
+      <div class="eq-title">Indices &amp; Dimensions</div>
+      <div class="eq-line"><b>i</b> ∈ {1 … <em>${n}</em>} &nbsp; — &nbsp; team members</div>
+      <div class="eq-line"><b>j</b> ∈ {1 … <em>${m}</em>} &nbsp; — &nbsp; active projects</div>
+      <div class="eq-note">n = ${n} people &nbsp;·&nbsp; m = ${m} projects &nbsp;·&nbsp; ${n*m} decision variables</div>
+    </div>
+
+    <div class="eq-block">
+      <div class="eq-title">Parameters</div>
+      <div class="eq-line"><em>CAP</em><sub>i</sub> &nbsp;∈ [35, 150] &nbsp; — &nbsp; capability score by seniority</div>
+      <div class="eq-line"><em>W</em><sub>j</sub> &nbsp;∈ [0.4, 2.0] &nbsp; — &nbsp; strategic weight of project j</div>
+      <div class="eq-line"><em>η</em> = <em>${SIM.state.eta.toFixed(2)}</em> &nbsp; — &nbsp; global efficiency multiplier</div>
+      <div class="eq-line"><em>x</em><sub>i,j</sub> ∈ {0,1} &nbsp; — &nbsp; eligibility (1 if person i can work on j)</div>
+    </div>
+
+    <div class="eq-block">
+      <div class="eq-title">Decision Variables</div>
+      <div class="eq-line"><b>p</b><sub>i,j</sub> ∈ [0, 1] &nbsp; — &nbsp; fraction of person i's time on project j</div>
+    </div>
+
+    <div class="eq-block">
+      <div class="eq-title">Contribution Equations</div>
+      <div class="eq-line"><em>C</em><sub>i,j</sub> = <em>CAP</em><sub>i</sub> &nbsp;×&nbsp; <em>p</em><sub>i,j</sub> &nbsp;×&nbsp; <em>W</em><sub>j</sub> &nbsp;×&nbsp; <em>η</em></div>
+      <div class="eq-line"><em>V</em><sub>i</sub> = Σ<sub>j</sub> <em>C</em><sub>i,j</sub> &nbsp; — &nbsp; total value generated by person i</div>
+      <div class="eq-line"><em>P</em><sub>j</sub> = Σ<sub>i</sub> <em>C</em><sub>i,j</sub> &nbsp; — &nbsp; total team value delivered to project j</div>
+      <div class="eq-note">Current state: Σ V<sub>i</sub> = <b>${totalV.toLocaleString()}</b> &nbsp;·&nbsp; Avg utilisation = <b>${avgUtil}%</b></div>
+    </div>
+
+    <div class="eq-block" style="border-left-color:#7dd3fc">
+      <div class="eq-title">Linear Programme (LPP)</div>
+      <div class="eq-line"><b>max</b> &nbsp; Σ<sub>i</sub> Σ<sub>j</sub> <em>CAP</em><sub>i</sub> · <em>W</em><sub>j</sub> · <em>η</em> · <b>p</b><sub>i,j</sub></div>
+      <br>
+      <div class="eq-line" style="color:#475569">subject to:</div>
+      <div class="eq-line">[C1] &nbsp; Σ<sub>j</sub> <b>p</b><sub>i,j</sub> = 1 &nbsp; ∀ i &nbsp; &nbsp; <span style="color:#334155">— person capacity</span></div>
+      <div class="eq-line">[C2] &nbsp; <em>P</em><sub>j</sub> ≥ <em>P</em><sub>j</sub><sup>min</sup> &nbsp; ∀ j &nbsp; &nbsp; <span style="color:#334155">— project floor</span></div>
+      <div class="eq-line">[C3] &nbsp; <b>p</b><sub>i,j</sub> ≤ <em>x</em><sub>i,j</sub> &nbsp; ∀ i,j &nbsp; &nbsp; <span style="color:#334155">— eligibility</span></div>
+      <div class="eq-line">[C4] &nbsp; <b>p</b><sub>i,j</sub> ≥ 0 &nbsp; ∀ i,j &nbsp; &nbsp; <span style="color:#334155">— non-negativity</span></div>
+      <div class="eq-note">C1: ${n} equality constraints &nbsp;·&nbsp; C2: ${m} inequality constraints (set in Optimize tab) &nbsp;·&nbsp; C3: eligibility from CSV allocation data</div>
+    </div>
+
+    <div class="eq-block" style="border-left-color:#f97316">
+      <div class="eq-title">Utilisation &amp; Gap</div>
+      <div class="eq-line"><em>util</em><sub>i</sub> = <em>V</em><sub>i</sub> / <em>CAP</em><sub>i</sub> &nbsp; — &nbsp; strategic deployment ratio</div>
+      <div class="eq-line"><em>gap</em><sub>j</sub> = max(0, <em>P</em><sub>j</sub><sup>min</sup> − <em>P</em><sub>j</sub>) &nbsp; — &nbsp; project deficit</div>
+      <div class="eq-line"><em>slack</em><sub>i,j</sub> = <em>x</em><sub>i,j</sub> − <b>p</b><sub>i,j</sub> &nbsp; — &nbsp; unused eligibility</div>
+    </div>`;
+}
+
+// ── Optimize (LPP Solver) ─────────────────────────────────────────────────────
+SIM.floors = {};  // projKey → P_j^min value
+
+function renderFloorSliders() {
+  const container = document.getElementById('sim-floor-sliders');
+  if (container.dataset.built) return;
+  container.dataset.built = '1';
+
+  const activeProjs = PROJECTS.filter(pr => PEOPLE.some(p=>(p.allocs[pr.key]||0)>0));
+  activeProjs.forEach(pr => {
+    const curP = Math.round(SIM.out.P[pr.key] || 0);
+    const row = document.createElement('div');
+    row.className = 'sim-param-row';
+    row.style.marginBottom = '7px';
+    const safeKey = pr.key.replace(/'/g,"\\'");
+    row.innerHTML = `
+      <span class="sim-param-label" style="width:110px"><span class="sim-dot" style="background:${pr.color}"></span>${pr.label}</span>
+      <input type="range" class="sim-range" min="0" max="${Math.max(curP*2,100)}" step="5" value="0"
+        data-floor-key="${pr.key}"
+        oninput="SIM.floors['${safeKey}']=+this.value;this.nextElementSibling.textContent=this.value">
+      <span class="sim-param-val">0</span>`;
+    container.appendChild(row);
+  });
+}
+
+function runLPP() {
+  // Two-phase greedy LP:
+  // Phase 1 — meet project floors (assign people by efficiency on that project)
+  // Phase 2 — maximise remaining capacity (each person → highest-W eligible project)
+
+  const remaining = {};  // fraction of person's time still unassigned
+  const optP = {};       // optP[name][projKey] = optimal fraction
+
+  PEOPLE.forEach(p => { remaining[p.name] = 1.0; optP[p.name] = {}; });
+
+  // Phase 1: meet floors in descending floor order
+  const floored = Object.entries(SIM.floors)
+    .filter(([,v]) => v > 0)
+    .sort((a,b) => b[1] - a[1]);
+
+  const deficits = {};
+  floored.forEach(([projKey, floor]) => {
+    const curP = SIM.out.P[projKey] || 0;
+    deficits[projKey] = Math.max(0, floor - curP);
+  });
+
+  floored.forEach(([projKey, floor]) => {
+    let deficit = Math.max(0, floor - 0); // total needed from scratch
+    // People eligible for this project, sorted by contribution per unit time (CAP × W)
+    const eligible = PEOPLE
+      .filter(p => (p.allocs[projKey]||0) > 0 && remaining[p.name] > 0.001)
+      .sort((a,b) => {
+        const eA = (SIM.state.capByLevel[a.level]||60) * (SIM.state.weightByProj[projKey]||1);
+        const eB = (SIM.state.capByLevel[b.level]||60) * (SIM.state.weightByProj[projKey]||1);
+        return eB - eA;
+      });
+
+    for (const p of eligible) {
+      if (deficit <= 0) break;
+      const cap  = SIM.state.capByLevel[p.level] || 60;
+      const w    = SIM.state.weightByProj[projKey] || 1;
+      const need = deficit / (cap * w * SIM.state.eta);
+      const assign = Math.min(remaining[p.name], need, 1.0);
+      optP[p.name][projKey] = (optP[p.name][projKey]||0) + assign;
+      remaining[p.name] -= assign;
+      deficit -= cap * assign * w * SIM.state.eta;
+    }
+  });
+
+  // Phase 2: assign remaining capacity to highest-W project per person
+  PEOPLE.forEach(p => {
+    const rem = remaining[p.name];
+    if (rem < 0.001) return;
+    const best = Object.keys(p.allocs)
+      .filter(k => (p.allocs[k]||0) > 0)
+      .sort((a,b) => (SIM.state.weightByProj[b]||0) - (SIM.state.weightByProj[a]||0))[0];
+    if (best) optP[p.name][best] = (optP[p.name][best]||0) + rem;
+  });
+
+  // Compute optimal V_i
+  const optV = {};
+  PEOPLE.forEach(p => {
+    optV[p.name] = 0;
+    Object.entries(optP[p.name]).forEach(([k,frac]) => {
+      optV[p.name] += (SIM.state.capByLevel[p.level]||60) * frac * (SIM.state.weightByProj[k]||1) * SIM.state.eta;
+    });
+  });
+
+  const optTotal = Object.values(optV).reduce((a,b)=>a+b,0);
+  const curTotal = Object.values(SIM.out.V).reduce((a,b)=>a+b,0);
+  const gain = optTotal - curTotal;
+
+  // Render result
+  const sortedPeople = [...PEOPLE].sort((a,b) => (optV[b.name]||0) - (optV[a.name]||0));
+  const maxOpt = Math.max(...Object.values(optV));
+  const maxCur = Math.max(...Object.values(SIM.out.V), 1);
+  const maxAll = Math.max(maxOpt, maxCur);
+
+  let html = `
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div class="sim-card" style="flex:1"><div class="sim-card-label">Optimal Total Value</div>
+        <div class="sim-card-val" style="color:#4ade80">${Math.round(optTotal).toLocaleString()}</div></div>
+      <div class="sim-card" style="flex:1"><div class="sim-card-label">Current Total Value</div>
+        <div class="sim-card-val">${Math.round(curTotal).toLocaleString()}</div></div>
+      <div class="sim-card" style="flex:1"><div class="sim-card-label">Potential Gain</div>
+        <div class="sim-card-val" style="color:${gain>0?'#4ade80':'#f87171'}">+${Math.round(gain).toLocaleString()}</div></div>
+    </div>
+    <div class="sim-col-title" style="margin-bottom:8px">Per-Person Gap &nbsp;<span style="color:#1d4ed8;font-weight:400">■</span> current &nbsp;<span style="color:#4ade80;font-weight:400">■</span> optimal</div>`;
+
+  sortedPeople.forEach(p => {
+    const cur = SIM.out.V[p.name] || 0;
+    const opt = optV[p.name] || 0;
+    const curPct = (cur / maxAll * 100).toFixed(1);
+    const optPct = (opt / maxAll * 100).toFixed(1);
+    const delta  = opt - cur;
+    html += `<div class="lpp-gap-row">
+      <span class="lpp-gap-name" title="${p.name}">${p.name}</span>
+      <div class="lpp-gap-track">
+        <div class="lpp-gap-opt" style="width:${optPct}%"></div>
+        <div class="lpp-gap-cur" style="width:${curPct}%"></div>
+      </div>
+      <span class="lpp-gap-delta" style="color:${delta>5?'#4ade80':delta<-5?'#f87171':'#475569'}">${delta>=0?'+':''}${Math.round(delta)}</span>
+    </div>`;
+  });
+
+  document.getElementById('sim-lpp-result').innerHTML = html;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 buildSimUI();
 SIM.compute();
 </script>
