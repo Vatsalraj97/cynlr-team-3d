@@ -112,6 +112,50 @@ input[type=range].sp-range::-webkit-slider-thumb:hover{transform:scale(1.3)}
 .perp-proj-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .perp-proj-name{flex:1;font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .perp-proj-col{font-size:9px;color:#334155;margin-top:2px}
+
+/* ── Simulation Panel ── */
+#sim-btn{padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:#94a3b8;font-size:13px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px}
+#sim-btn:hover,#sim-btn.active{background:rgba(74,222,128,0.12);border-color:#4ade80;color:#4ade80}
+#sim-panel{position:fixed;bottom:-62vh;left:0;right:0;height:62vh;background:rgba(2,6,16,0.98);border-top:1px solid rgba(255,255,255,0.08);z-index:25;display:flex;flex-direction:column;transition:bottom 0.38s cubic-bezier(0.25,0.46,0.45,0.94);backdrop-filter:blur(20px)}
+#sim-panel.open{bottom:0}
+.sim-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.sim-bar-title{font-size:12px;font-weight:700;letter-spacing:0.1em;color:#4ade80;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.sim-bar-title span{font-size:10px;color:#334155;font-weight:400;letter-spacing:0.05em}
+.sim-bar-actions{display:flex;gap:8px}
+.sim-action-btn{padding:4px 12px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#64748b;font-size:11px;cursor:pointer;transition:all 0.18s}
+.sim-action-btn:hover{background:rgba(74,222,128,0.1);border-color:#4ade80;color:#4ade80}
+.sim-action-btn.primary{border-color:rgba(74,222,128,0.4);color:#4ade80}
+.sim-body{display:flex;flex:1;overflow:hidden}
+/* Left — params */
+.sim-params{width:38%;border-right:1px solid rgba(255,255,255,0.05);overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:16px}
+.sim-param-group{}
+.sim-param-group-title{font-size:9px;font-weight:700;letter-spacing:0.12em;color:#1e3a5f;text-transform:uppercase;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.sim-param-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sim-param-row:last-child{margin-bottom:0}
+.sim-param-label{font-size:10px;color:#475569;width:130px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sim-param-label .sim-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+input[type=range].sim-range{flex:1;-webkit-appearance:none;height:2px;border-radius:1px;background:rgba(255,255,255,0.08);outline:none;cursor:pointer;min-width:0}
+input[type=range].sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#4ade80;cursor:pointer}
+.sim-param-val{font-size:10px;color:#334155;width:32px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0}
+/* Right — analytics */
+.sim-analytics{flex:1;overflow-y:auto;padding:14px 20px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:14px}
+.sim-cards{grid-column:1/-1;display:flex;gap:10px}
+.sim-card{flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 14px}
+.sim-card-label{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#334155;margin-bottom:4px}
+.sim-card-val{font-size:22px;font-weight:700;color:#e2e8f0;line-height:1}
+.sim-card-sub{font-size:10px;color:#475569;margin-top:3px}
+.sim-col-title{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#1e3a5f;margin-bottom:8px}
+.sim-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.sim-bar-row:last-child{margin-bottom:0}
+.sim-bar-name{font-size:10px;color:#64748b;width:100px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sim-bar-track{flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;position:relative}
+.sim-bar-fill{height:100%;border-radius:3px;transition:width 0.4s ease}
+.sim-bar-num{font-size:10px;color:#334155;width:40px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0}
+.sim-alert{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;margin-bottom:5px;font-size:10px}
+.sim-alert.warn{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fbbf24}
+.sim-alert.info{background:rgba(125,211,252,0.06);border:1px solid rgba(125,211,252,0.15);color:#7dd3fc}
+.sim-alert-icon{font-size:12px;flex-shrink:0}
+.sim-alerts-col{grid-column:1/-1}
 </style>
 </head>
 <body>
@@ -122,6 +166,7 @@ input[type=range].sp-range::-webkit-slider-thumb:hover{transform:scale(1.3)}
   <button class="tab" id="btn-hierarchy" onclick="switchView('hierarchy')">Hierarchy</button>
   <button class="tab" id="btn-flow" onclick="switchView('flow')">Process Flow</button>
   <button class="tab" id="btn-radar" onclick="switchView('radar')">Distribution</button>
+  <button id="sim-btn" onclick="toggleSim()">∑ Simulate</button>
   <button id="settings-btn" onclick="toggleSettings()">⚙ Settings</button>
   <div id="legend">
     <span><b style="background:#fbbf24"></b>Intern</span>
@@ -136,6 +181,59 @@ input[type=range].sp-range::-webkit-slider-thumb:hover{transform:scale(1.3)}
 <div id="person-panel"></div>
 <div id="project-panel"></div>
 <div id="hint">Drag to orbit · Scroll to zoom · Hover to inspect · Click tower to inspect</div>
+
+<div id="sim-panel">
+  <div class="sim-bar">
+    <div class="sim-bar-title">
+      ∑ Simulation Engine
+      <span>Weighted Capability Allocation Model</span>
+    </div>
+    <div class="sim-bar-actions">
+      <button class="sim-action-btn" onclick="SIM.reset()">↺ Reset Defaults</button>
+      <button class="sim-action-btn" onclick="toggleSim()">✕</button>
+    </div>
+  </div>
+  <div class="sim-body">
+
+    <!-- LEFT: Parameters -->
+    <div class="sim-params">
+      <div class="sim-param-group">
+        <div class="sim-param-group-title">Capability Score by Level (CAP<sub>i</sub>)</div>
+        <div id="sim-cap-sliders"></div>
+      </div>
+      <div class="sim-param-group">
+        <div class="sim-param-group-title">Project Weights (W<sub>j</sub>)</div>
+        <div id="sim-weight-sliders"></div>
+      </div>
+      <div class="sim-param-group">
+        <div class="sim-param-group-title">Global Efficiency (η)</div>
+        <div class="sim-param-row">
+          <span class="sim-param-label">Efficiency multiplier</span>
+          <input type="range" class="sim-range" min="0.1" max="2" step="0.05" value="1.0"
+            oninput="SIM.set('eta','_',parseFloat(this.value));document.getElementById('eta-val').textContent=parseFloat(this.value).toFixed(2)">
+          <span class="sim-param-val" id="eta-val">1.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Analytics -->
+    <div class="sim-analytics">
+      <div class="sim-cards" id="sim-cards"></div>
+      <div>
+        <div class="sim-col-title">People — Total Value (V<sub>i</sub>)</div>
+        <div id="sim-people-bars"></div>
+      </div>
+      <div>
+        <div class="sim-col-title">Projects — Team Value (P<sub>j</sub>)</div>
+        <div id="sim-proj-bars"></div>
+      </div>
+      <div class="sim-alerts-col">
+        <div class="sim-col-title">Alerts</div>
+        <div id="sim-alerts"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="settings-panel">
   <div class="sp-head">
@@ -1928,6 +2026,282 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// ─── SIMULATION ENGINE ────────────────────────────────────────────────────────
+const SIM = (() => {
+  // ── Default parameters ────────────────────────────────────────────────────
+  const DEFAULT_CAP = {
+    'Principal Engineer': 150,
+    'Senior Engineer':    120,
+    'Lead':               100,
+    'Engineer 3':          85,
+    'Engineer 2':          70,
+    'Engineer 1':          55,
+    'Engineer Intern':     45,
+    'Intern':              35,
+  };
+
+  // Project weights derived from DAG position (strategic importance)
+  const DEFAULT_W = {
+    // Solutions — customer-facing, highest multiplier
+    'Audi(Door Assembly)':            2.0,
+    'Lam Research (QC Cup Assembly)': 2.0,
+    'AMAT -1 (Kitting)':              2.0,
+    'AMAT -2 (Frame Handling)':       2.0,
+    'Schneider Electric - India':     2.0,
+    'Hyundai':                        2.0,
+    // Products
+    'CyRo':                           1.8,
+    'CyNoid':                         1.8,
+    // Core Platform
+    'CLX':                            1.6,
+    // Research
+    'Robotics Research':              1.2,
+    // Tooling
+    'SW Tools':                       1.0,
+    'HW Tools':                       1.0,
+    'Gripper':                        1.0,
+    // Infrastructure
+    'DevOps':                         0.8,
+    'Code Refactoring':               0.8,
+    'Demo Development':               0.8,
+    // Foundation / support
+    'Research/Exploration - HW':      0.6,
+    'Research/Exploration - SW':      0.6,
+    'Neuroscience, Vision Research IISC': 0.6,
+    'Product Packaging':              0.5,
+    'Documentation':                  0.4,
+    'Hiring':                         0.4,
+  };
+
+  // State (mutable by UI)
+  const state = {
+    capByLevel:  Object.assign({}, DEFAULT_CAP),
+    weightByProj: Object.assign({}, DEFAULT_W),
+    eta: 1.0,
+  };
+
+  // Output (recalculated on compute)
+  const out = {
+    C:    {},   // C[name][projKey]  = contribution score
+    V:    {},   // V[name]           = total value
+    P:    {},   // P[projKey]        = total project value
+    util: {},   // util[name]        = V[name] / CAP[name]  (0-n)
+    capOf: {},  // capOf[name]       = raw CAP score
+  };
+
+  function compute() {
+    // Reset
+    PEOPLE.forEach(p => { out.C[p.name] = {}; out.V[p.name] = 0; });
+    PROJECTS.forEach(pr => { out.P[pr.key] = 0; });
+
+    PEOPLE.forEach(p => {
+      const cap = state.capByLevel[p.level] || 60;
+      out.capOf[p.name] = cap;
+
+      // Normalize allocations to sum = 1.0
+      const totalAlloc = Object.values(p.allocs).reduce((s, v) => s + v, 0) || 100;
+
+      Object.entries(p.allocs).forEach(([projKey, pct]) => {
+        const w   = state.weightByProj[projKey] || 0.5;
+        const pij = pct / totalAlloc;             // normalised 0-1
+        const C   = cap * pij * w * state.eta;
+        out.C[p.name][projKey] = C;
+        out.V[p.name]         += C;
+        out.P[projKey]        = (out.P[projKey] || 0) + C;
+      });
+
+      out.util[p.name] = out.V[p.name] / cap;
+    });
+
+    window.dispatchEvent(new Event('sim-updated'));
+  }
+
+  function reset() {
+    Object.assign(state.capByLevel,  DEFAULT_CAP);
+    Object.assign(state.weightByProj, DEFAULT_W);
+    state.eta = 1.0;
+    // Sync sliders
+    document.querySelectorAll('[data-sim-cap]').forEach(el => {
+      const lvl = el.dataset.simCap;
+      el.value = state.capByLevel[lvl];
+      el.nextElementSibling.textContent = state.capByLevel[lvl];
+    });
+    document.querySelectorAll('[data-sim-w]').forEach(el => {
+      const key = el.dataset.simW;
+      el.value = state.weightByProj[key] || 1.0;
+      el.nextElementSibling.textContent = (state.weightByProj[key] || 1.0).toFixed(1);
+    });
+    const etaEl = document.querySelector('[oninput*="eta"]');
+    if (etaEl) { etaEl.value = 1.0; document.getElementById('eta-val').textContent = '1.00'; }
+    compute();
+  }
+
+  function set(type, key, val) {
+    if (type === 'cap')  state.capByLevel[key]   = val;
+    if (type === 'w')    state.weightByProj[key] = val;
+    if (type === 'eta')  state.eta               = val;
+    compute();
+  }
+
+  return { state, out, compute, reset, set, DEFAULT_CAP, DEFAULT_W };
+})();
+
+// ── Build parameter sliders ──────────────────────────────────────────────────
+function buildSimUI() {
+  // Level CAP sliders
+  const capContainer = document.getElementById('sim-cap-sliders');
+  const levelOrder = ['Principal Engineer','Senior Engineer','Lead','Engineer 3','Engineer 2','Engineer 1','Engineer Intern','Intern'];
+  const levelColors = {'Principal Engineer':'#e879f9','Senior Engineer':'#f97316','Lead':'#4ade80','Engineer 3':'#1d4ed8','Engineer 2':'#3b82f6','Engineer 1':'#60a5fa','Engineer Intern':'#93c5fd','Intern':'#fbbf24'};
+
+  levelOrder.forEach(lvl => {
+    const val = SIM.state.capByLevel[lvl] || 60;
+    const row = document.createElement('div');
+    row.className = 'sim-param-row';
+    row.innerHTML = `
+      <span class="sim-param-label"><span class="sim-dot" style="background:${levelColors[lvl]||'#64748b'}"></span>${lvl}</span>
+      <input type="range" class="sim-range" min="10" max="200" step="5" value="${val}"
+        data-sim-cap="${lvl}"
+        oninput="SIM.set('cap','${lvl.replace(/'/g,"\\'")}',+this.value);this.nextElementSibling.textContent=this.value">
+      <span class="sim-param-val">${val}</span>`;
+    capContainer.appendChild(row);
+  });
+
+  // Project weight sliders — grouped by tier label
+  const wContainer = document.getElementById('sim-weight-sliders');
+  const TIER_GROUPS = [
+    { label: 'Solutions', keys: ['Audi(Door Assembly)','Lam Research (QC Cup Assembly)','AMAT -1 (Kitting)','AMAT -2 (Frame Handling)','Schneider Electric - India','Hyundai'] },
+    { label: 'Products',  keys: ['CyRo','CyNoid'] },
+    { label: 'Core Platform', keys: ['CLX'] },
+    { label: 'Research',  keys: ['Robotics Research'] },
+    { label: 'Tooling',   keys: ['SW Tools','HW Tools','Gripper'] },
+    { label: 'Infrastructure', keys: ['DevOps','Code Refactoring','Demo Development'] },
+    { label: 'Foundation', keys: ['Research/Exploration - HW','Research/Exploration - SW','Neuroscience, Vision Research IISC','Product Packaging','Documentation','Hiring'] },
+  ];
+
+  TIER_GROUPS.forEach(tier => {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:9px;color:#1e3a5f;letter-spacing:0.08em;text-transform:uppercase;margin:8px 0 4px;font-weight:600';
+    hdr.textContent = tier.label;
+    wContainer.appendChild(hdr);
+
+    tier.keys.forEach(key => {
+      const proj = PROJECTS.find(p => p.key === key);
+      if (!proj) return;
+      const val = (SIM.state.weightByProj[key] || 1.0).toFixed(1);
+      const safeKey = key.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      const row = document.createElement('div');
+      row.className = 'sim-param-row';
+      row.innerHTML = `
+        <span class="sim-param-label"><span class="sim-dot" style="background:${proj.color}"></span>${proj.label}</span>
+        <input type="range" class="sim-range" min="0.1" max="3" step="0.1" value="${val}"
+          data-sim-w="${safeKey}"
+          oninput="SIM.set('w','${safeKey}',+this.value);this.nextElementSibling.textContent=(+this.value).toFixed(1)">
+        <span class="sim-param-val">${val}</span>`;
+      wContainer.appendChild(row);
+    });
+  });
+}
+
+// ── Render analytics ─────────────────────────────────────────────────────────
+function renderSimAnalytics() {
+  const out = SIM.out;
+
+  // Summary cards
+  const totalV = Object.values(out.V).reduce((s, v) => s + v, 0);
+  const avgUtil = Object.values(out.util).reduce((s, v) => s + v, 0) / PEOPLE.length;
+  const maxPj   = Math.max(...Object.values(out.P));
+  document.getElementById('sim-cards').innerHTML = `
+    <div class="sim-card">
+      <div class="sim-card-label">Total Team Value</div>
+      <div class="sim-card-val">${Math.round(totalV).toLocaleString()}</div>
+      <div class="sim-card-sub">Σ V<sub>i</sub> across ${PEOPLE.length} people</div>
+    </div>
+    <div class="sim-card">
+      <div class="sim-card-label">Avg Utilization</div>
+      <div class="sim-card-val" style="color:${avgUtil>=1?'#4ade80':avgUtil>=0.7?'#fbbf24':'#f87171'}">${(avgUtil*100).toFixed(0)}%</div>
+      <div class="sim-card-sub">V<sub>i</sub> / CAP<sub>i</sub> averaged</div>
+    </div>
+    <div class="sim-card">
+      <div class="sim-card-label">Top Project Value</div>
+      <div class="sim-card-val">${Math.round(maxPj)}</div>
+      <div class="sim-card-sub">${Object.entries(out.P).sort((a,b)=>b[1]-a[1])[0]?.[0]?.split(' ')[0] || ''}</div>
+    </div>`;
+
+  // People bars — sorted by V_i desc
+  const maxV = Math.max(...Object.values(out.V));
+  const sortedPeople = [...PEOPLE].sort((a, b) => (out.V[b.name]||0) - (out.V[a.name]||0));
+  const levelColors = {'Principal Engineer':'#e879f9','Senior Engineer':'#f97316','Lead':'#4ade80','Engineer 3':'#1d4ed8','Engineer 2':'#3b82f6','Engineer 1':'#60a5fa','Engineer Intern':'#93c5fd','Intern':'#fbbf24'};
+  document.getElementById('sim-people-bars').innerHTML = sortedPeople.map(p => {
+    const v    = out.V[p.name] || 0;
+    const util = out.util[p.name] || 0;
+    const col  = levelColors[p.level] || '#64748b';
+    const pct  = maxV > 0 ? (v / maxV * 100).toFixed(1) : 0;
+    const utilColor = util >= 1 ? '#4ade80' : util >= 0.65 ? '#fbbf24' : '#f87171';
+    return `<div class="sim-bar-row">
+      <span class="sim-bar-name" style="color:${col}" title="${p.name}">${p.name}</span>
+      <div class="sim-bar-track"><div class="sim-bar-fill" style="width:${pct}%;background:${col}88"></div></div>
+      <span class="sim-bar-num" style="color:${utilColor}" title="Utilization ${(util*100).toFixed(0)}%">${Math.round(v)}</span>
+    </div>`;
+  }).join('');
+
+  // Project bars — sorted by P_j desc
+  const maxP = Math.max(...Object.values(out.P));
+  const sortedProjs = PROJECTS.filter(pr => out.P[pr.key] > 0).sort((a, b) => (out.P[b.key]||0) - (out.P[a.key]||0));
+  document.getElementById('sim-proj-bars').innerHTML = sortedProjs.map(pr => {
+    const pval = out.P[pr.key] || 0;
+    const pct  = maxP > 0 ? (pval / maxP * 100).toFixed(1) : 0;
+    const w    = SIM.state.weightByProj[pr.key] || 1;
+    return `<div class="sim-bar-row">
+      <span class="sim-bar-name" style="color:${pr.color}" title="${pr.key}">${pr.label}</span>
+      <div class="sim-bar-track"><div class="sim-bar-fill" style="width:${pct}%;background:${pr.color}88"></div></div>
+      <span class="sim-bar-num" title="W=${w}">${Math.round(pval)}</span>
+    </div>`;
+  }).join('');
+
+  // Alerts
+  const alerts = [];
+  // Underutilization: person spending >40% on low-weight projects (avg W < 0.7)
+  PEOPLE.forEach(p => {
+    const totalAlloc = Object.values(p.allocs).reduce((s,v)=>s+v,0)||100;
+    let lowW = 0;
+    Object.entries(p.allocs).forEach(([k,v]) => {
+      if ((SIM.state.weightByProj[k]||0.5) < 0.7) lowW += v;
+    });
+    if (lowW / totalAlloc > 0.5) {
+      alerts.push({type:'warn', msg:`${p.name} — ${Math.round(lowW/totalAlloc*100)}% on low-weight work (W < 0.7)`});
+    }
+  });
+  // Low-powered projects: P_j < 30% of average
+  const avgP = Object.values(out.P).reduce((s,v)=>s+v,0) / Object.values(out.P).filter(v=>v>0).length;
+  Object.entries(out.P).forEach(([key, pval]) => {
+    if (pval > 0 && pval < avgP * 0.3) {
+      const pr = PROJECTS.find(p => p.key === key);
+      alerts.push({type:'info', msg:`${pr?.label || key} — low team value (${Math.round(pval)} vs avg ${Math.round(avgP)})`});
+    }
+  });
+  document.getElementById('sim-alerts').innerHTML = alerts.length
+    ? alerts.slice(0, 8).map(a => `<div class="sim-alert ${a.type}"><span class="sim-alert-icon">${a.type==='warn'?'⚠':'ℹ'}</span>${a.msg}</div>`).join('')
+    : `<div class="sim-alert info"><span class="sim-alert-icon">✓</span>No major imbalances detected</div>`;
+}
+
+// ── Panel open/close ─────────────────────────────────────────────────────────
+let _simOpen = false;
+window.toggleSim = function() {
+  _simOpen = !_simOpen;
+  document.getElementById('sim-panel').classList.toggle('open', _simOpen);
+  document.getElementById('sim-btn').classList.toggle('active', _simOpen);
+  if (_simOpen) renderSimAnalytics();
+};
+
+// Live update analytics whenever sim recomputes
+window.addEventListener('sim-updated', () => {
+  if (_simOpen) renderSimAnalytics();
+});
+
+// Init
+buildSimUI();
+SIM.compute();
 </script>
 </body>
 </html>
