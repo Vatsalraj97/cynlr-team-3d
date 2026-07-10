@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+ss_*.png
+screenshot*.png
+*.xlsx
+~$*
+*.log
+*.err
+graphify-out/
