@@ -5,6 +5,7 @@ Standalone native desktop app.  No browser required.
 Run:  python app.py
 """
 import threading, time, sys, os
+from dataclasses import dataclass
 import numpy as np
 import dearpygui.dearpygui as dpg
 
@@ -12,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data import build_tensors, PROJECTS, PEOPLE
 from engine import DRVEngine
 from simgraph_adapter import SimGraphAdapter
+from events import EventQueue
 
 # ═══════════════════════════════════════════════════════════
 # PROJECT + PEOPLE METADATA
@@ -79,10 +81,34 @@ ACCENT   = ( 99,102,241, 255)   # buttons / sliders
 # ═══════════════════════════════════════════════════════════
 # ENGINE STATE
 # ═══════════════════════════════════════════════════════════
-eng  = None
-lock = threading.Lock()
-ctrl = {'tps': 5, 'paused': True, 'dt': 1.0}  # starts PAUSED
+
+@dataclass
+class Snapshot:
+    t:     float
+    W:     np.ndarray
+    PHI:   np.ndarray
+    ALPHA: np.ndarray
+    V:     np.ndarray
+    S:     np.ndarray
+    flow:  np.ndarray
+    R:     np.ndarray
+
+eng         = None
+ctrl        = {'tps': 5, 'paused': True, 'dt': 1.0}  # starts PAUSED
 sim_running = False
+
+# Command queue — edits from the render thread are enqueued here,
+# drained at the start of each sim tick to avoid cross-thread mutation.
+_cmds     = []
+_cmd_lock = threading.Lock()
+
+# EventQueue — wired into sim_loop, reset on launch/reset.
+_events: EventQueue | None = None
+
+# Sparkline ring buffer — M projects × SPARK_LEN ticks of S[j] history.
+SPARK_LEN = 60
+_spark_S  = np.zeros((M, SPARK_LEN), dtype=np.float32)
+_spark_i  = [0]   # write index (wraps)
 
 def init_engine_with_config(W_init, g_mult, tps, dt):
     global eng
@@ -96,28 +122,46 @@ def init_engine_with_config(W_init, g_mult, tps, dt):
     ctrl['tps'] = int(tps)
     ctrl['dt']  = float(dt)
 
-snap = {
-    't': 0.0,
-    'W':    np.ones(M)*2.0,
-    'PHI':  np.zeros((M,M)),
-    'ALPHA':np.zeros((M,M)),
-    'V':    np.zeros(N),
-}
+# Initial snapshot — zeros; render thread reads this before first tick.
+snap = Snapshot(
+    t=0.0,
+    W=np.ones(M, dtype=np.float32) * 2.0,
+    PHI=np.zeros((M, M), dtype=np.float32),
+    ALPHA=np.zeros((M, M), dtype=np.float32),
+    V=np.zeros(N, dtype=np.float32),
+    S=np.zeros(M, dtype=np.float32),
+    flow=np.zeros(M, dtype=np.float32),
+    R=np.ones(M, dtype=np.float32),
+)
 
 def sim_loop():
     global snap
     while True:
         if not ctrl['paused'] and eng is not None:
-            with lock:
-                eng.tick(ctrl['dt'])
-                C = eng.contribution()
-                snap = {
-                    't':    eng.t,
-                    'W':    eng.W.copy(),
-                    'PHI':  eng.PHI.copy(),
-                    'ALPHA':eng.ALPHA.copy(),
-                    'V':    C.sum(axis=1).copy(),
-                }
+            # Drain command queue before tick — safe single-point mutation.
+            with _cmd_lock:
+                cmds = list(_cmds); _cmds.clear()
+            for cmd in cmds:
+                cmd()
+            # Process any scheduled events.
+            if _events is not None:
+                _events.process(eng, eng.t)
+            # Advance simulation one step.
+            state = eng.tick(ctrl['dt'])
+            # Record S[j] into sparkline ring buffer.
+            _spark_S[:, _spark_i[0]] = state['S']
+            _spark_i[0] = (_spark_i[0] + 1) % SPARK_LEN
+            # Publish immutable snapshot — atomic reference swap (GIL-safe).
+            snap = Snapshot(
+                t=float(state['t']),
+                W=eng.W.copy(),
+                PHI=eng.PHI.copy(),
+                ALPHA=eng.ALPHA.copy(),
+                V=state['V'].copy(),
+                S=state['S'].copy(),
+                flow=state['flow'].copy(),
+                R=state['R'].copy(),
+            )
         time.sleep(1.0 / max(ctrl['tps'], 1))
 
 # ═══════════════════════════════════════════════════════════
@@ -252,7 +296,7 @@ def build_config_window(W_defaults):
 
 
 def do_launch():
-    global sim_running
+    global sim_running, _events
     tps    = dpg.get_value('cfg_tps')
     dt     = dpg.get_value('cfg_dt')
     g_mult = dpg.get_value('cfg_gmult')
@@ -265,6 +309,9 @@ def do_launch():
         dpg.set_value('tps_sl', tps)
 
     init_engine_with_config(W_init, g_mult, tps, dt)
+    _events = EventQueue()
+    _spark_S[:] = 0.0
+    _spark_i[0] = 0
     ctrl['paused'] = True   # always start paused
 
     if not sim_running:
@@ -287,8 +334,9 @@ def _draw_phi_alpha():
     dl  = 'dl_phi'
     if not dpg.does_item_exist(dl): return
     dpg.delete_item(dl, children_only=True)
-    PHI = snap['PHI']
-    ALP = snap['ALPHA']
+    s   = snap          # capture atomic reference
+    PHI = s.PHI
+    ALP = s.ALPHA
 
     TW   = PM_LHDR + M*PM_CELL
     TH   = PM_THDR + M*PM_CELL
@@ -454,6 +502,148 @@ def _draw_people():
 
 
 # ═══════════════════════════════════════════════════════════
+# DRAW — SIMULATION OUTPUT  (Tab 3)
+# ═══════════════════════════════════════════════════════════
+_OUT_NAME_W = 100   # project name column width
+_OUT_BAR_W  = 260   # S[j] bar max width
+_OUT_FLOW_W = 160   # FLOW bar max width
+_OUT_ROW_H  = 30    # row height
+
+def _draw_output():
+    dl = 'dl_out'
+    if not dpg.does_item_exist(dl): return
+    dpg.delete_item(dl, children_only=True)
+    s = snap   # atomic capture
+
+    # Compute FLOW normalisation — relative to max for scaling bars.
+    max_flow = float(np.max(s.flow)) if s.flow.max() > 0 else 1.0
+
+    # Background
+    total_w = _OUT_NAME_W + _OUT_BAR_W + 20 + _OUT_FLOW_W + 20
+    total_h = M * _OUT_ROW_H + 50
+    dpg.draw_rectangle([0, 0], [total_w, total_h],
+                       fill=MAT_BG, color=(0,0,0,0), parent=dl)
+
+    # Column headers
+    dpg.draw_text([4, 6],               "PROJECT",     color=DIM, size=9, parent=dl)
+    dpg.draw_text([_OUT_NAME_W + 4, 6], "READINESS  S[j]  (0 → 1.0+)", color=DIM, size=9, parent=dl)
+    dpg.draw_text([_OUT_NAME_W + _OUT_BAR_W + 24, 6],
+                  "FLOW  (relative)", color=DIM, size=9, parent=dl)
+    dpg.draw_line([0, 18], [total_w, 18], color=SEP, thickness=1, parent=dl)
+
+    Y0 = 22
+    for j in range(M):
+        y  = Y0 + j * _OUT_ROW_H
+        yc = y + _OUT_ROW_H // 2 - 6   # vertical centre for text
+
+        cat_col = CAT_C.get(CAT[j], GRID)
+        s_val   = float(np.clip(s.S[j], 0.0, 2.0))
+        f_val   = float(s.flow[j])
+        r_val   = float(s.R[j])
+
+        # Alternate row tint
+        if j % 2 == 0:
+            dpg.draw_rectangle([0, y], [total_w, y + _OUT_ROW_H],
+                               fill=(20, 22, 34, 255), color=(0,0,0,0), parent=dl)
+
+        # Project name
+        dpg.draw_text([4, yc], SHORT[j][:10], color=cat_col, size=10, parent=dl)
+
+        # S[j] bar — 0..1 is "normal", 1..2 is "over-run" shown in green
+        bar_fill = min(s_val, 1.0)
+        bw = int(bar_fill * _OUT_BAR_W)
+        # Colour: gradient from dim → category colour as S increases
+        bar_col = lerp4(min(s_val, 1.0), (40, 44, 64, 255), cat_col)
+        # Track background
+        dpg.draw_rectangle(
+            [_OUT_NAME_W, y + 4],
+            [_OUT_NAME_W + _OUT_BAR_W, y + _OUT_ROW_H - 4],
+            fill=(30, 33, 50, 255), color=GRID, thickness=1, parent=dl)
+        # Fill
+        if bw > 0:
+            dpg.draw_rectangle(
+                [_OUT_NAME_W, y + 4],
+                [_OUT_NAME_W + bw, y + _OUT_ROW_H - 4],
+                fill=bar_col, color=(0,0,0,0), parent=dl)
+        # S value text
+        pct_lbl = f"{s_val*100:.0f}%"
+        dpg.draw_text([_OUT_NAME_W + _OUT_BAR_W + 4, yc],
+                      pct_lbl, color=LCOL, size=10, parent=dl)
+
+        # FLOW bar (relative to max)
+        fw = int((f_val / max_flow) * _OUT_FLOW_W) if max_flow > 0 else 0
+        fx = _OUT_NAME_W + _OUT_BAR_W + 22
+        dpg.draw_rectangle(
+            [fx, y + 6], [fx + _OUT_FLOW_W, y + _OUT_ROW_H - 6],
+            fill=(30, 33, 50, 255), color=GRID, thickness=1, parent=dl)
+        if fw > 0:
+            dpg.draw_rectangle(
+                [fx, y + 6], [fx + fw, y + _OUT_ROW_H - 6],
+                fill=(99, 102, 241, 200), color=(0,0,0,0), parent=dl)
+
+        # At-risk indicator: red dot if S declining over last 5 ticks
+        idx = _spark_i[0]
+        recent = [_spark_S[j, (idx - 1 - k) % SPARK_LEN] for k in range(5)]
+        declining = len(recent) >= 2 and recent[0] < recent[-1] - 0.005
+        if declining:
+            dot_x = fx + _OUT_FLOW_W + 10
+            dpg.draw_circle([dot_x, yc + 5], 4,
+                            fill=(239, 68, 68, 255), color=(0,0,0,0), parent=dl)
+
+    # Divider lines
+    dpg.draw_line([_OUT_NAME_W - 2, 18], [_OUT_NAME_W - 2, total_h],
+                  color=SEP, thickness=1, parent=dl)
+    dpg.draw_line([_OUT_NAME_W + _OUT_BAR_W + 20, 18],
+                  [_OUT_NAME_W + _OUT_BAR_W + 20, total_h],
+                  color=SEP, thickness=1, parent=dl)
+
+
+# ═══════════════════════════════════════════════════════════
+# DRAW — SPARKLINES  (left panel, under each W slider)
+# ═══════════════════════════════════════════════════════════
+
+def _draw_sparklines():
+    idx = _spark_i[0]
+    W   = 0   # x origin inside drawlist
+    H   = 12  # drawlist height
+
+    for j in range(M):
+        tag = f'spark_{j}'
+        if not dpg.does_item_exist(tag): continue
+        dpg.delete_item(tag, children_only=True)
+
+        # Read history in chronological order from ring buffer.
+        raw = [float(_spark_S[j, (idx + k) % SPARK_LEN]) for k in range(SPARK_LEN)]
+
+        # Check if any data has been written yet.
+        if max(raw) < 1e-6:
+            continue
+
+        spark_w = dpg.get_item_width(tag) or 160
+
+        # Detect declining trend (last 8 vs first 8 in window).
+        recent_mean  = sum(raw[-8:]) / 8.0
+        earlier_mean = sum(raw[:8])  / 8.0
+        declining = recent_mean < earlier_mean - 0.01
+
+        border_col = (239, 68, 68, 180) if declining else (55, 60, 88, 120)
+        dpg.draw_rectangle([0, 0], [spark_w - 2, H],
+                           fill=(18, 20, 30, 200), color=border_col,
+                           thickness=1, parent=tag)
+
+        # Scale: S values 0..1.5 → y inside [1, H-1]
+        max_s = max(max(raw), 0.01)
+        def sy(v): return H - 1 - int((v / max(max_s, 1.0)) * (H - 2))
+
+        # Draw polyline
+        step = (spark_w - 4) / max(SPARK_LEN - 1, 1)
+        pts  = [[2 + int(i * step), sy(raw[i])] for i in range(SPARK_LEN)]
+        line_col = (239, 68, 68, 220) if declining else (99, 102, 241, 200)
+        for i in range(len(pts) - 1):
+            dpg.draw_line(pts[i], pts[i+1], color=line_col, thickness=1, parent=tag)
+
+
+# ═══════════════════════════════════════════════════════════
 # CELL EDITOR POPUP
 # ═══════════════════════════════════════════════════════════
 _edit = {'type': None, 'j': 0, 'k': 0}
@@ -468,17 +658,33 @@ def _show_edit(etype, j, k, cur):
     dpg.configure_item('edit_popup', show=True)
 
 def _apply_edit():
+    global snap
     v = float(dpg.get_value('edit_val'))
-    j, k = _edit['j'], _edit['k']
-    with lock:
-        if _edit['type'] == 'phi':
+    j, k, etype = _edit['j'], _edit['k'], _edit['type']
+    # Apply immediately on eng if paused (render thread owns it while paused);
+    # otherwise enqueue so sim thread picks it up at tick-start.
+    def _cmd():
+        if etype == 'phi':
             if eng: eng.PHI[j,k]   = np.clip(v, 0.0, 1.0)
-            snap['PHI'][j,k]       = np.clip(v, 0.0, 1.0)
         else:
             if eng: eng.ALPHA[j,k] = np.clip(v, 0.0, 2.0)
-            snap['ALPHA'][j,k]     = np.clip(v, 0.0, 2.0)
+    if ctrl['paused']:
+        _cmd()
+        # Re-publish snapshot so the matrix redraws without waiting for a tick.
+        s = snap
+        new_phi   = s.PHI.copy()
+        new_alpha = s.ALPHA.copy()
+        if etype == 'phi':
+            new_phi[j,k] = np.clip(v, 0.0, 1.0)
+        else:
+            new_alpha[j,k] = np.clip(v, 0.0, 2.0)
+        snap = Snapshot(t=s.t, W=s.W, PHI=new_phi, ALPHA=new_alpha,
+                        V=s.V, S=s.S, flow=s.flow, R=s.R)
+    else:
+        with _cmd_lock:
+            _cmds.append(_cmd)
     dpg.configure_item('edit_popup', show=False)
-    _draw_phi_alpha()   # redraw immediately
+    _draw_phi_alpha()
 
 def _check_phi_click():
     if not dpg.does_item_exist('dl_phi'): return
@@ -493,9 +699,9 @@ def _check_phi_click():
     if 0 <= j < M and 0 <= k < M and j != k:
         s = snap
         if j < k:
-            _show_edit('phi',   j, k, s['PHI'][j,k])
+            _show_edit('phi',   j, k, s.PHI[j,k])
         else:
-            _show_edit('alpha', j, k, s['ALPHA'][j,k])
+            _show_edit('alpha', j, k, s.ALPHA[j,k])
 
 
 # ═══════════════════════════════════════════════════════════
@@ -535,7 +741,7 @@ def build_main_window(W_WIN=1440, H_WIN=920):
         # ── Body: left panel + tabs ───────────────────────────
         with dpg.group(horizontal=True):
 
-            # Left: W resistance sliders only
+            # Left: W resistance sliders + S[j] sparklines
             with dpg.child_window(tag='left_win', width=LEFT_W,
                                   height=BODY_H, border=True):
                 dpg.add_text("RESISTANCE  W", color=DIM)
@@ -553,7 +759,12 @@ def build_main_window(W_WIN=1440, H_WIN=920):
                         format="W = %.2f",
                         callback=_make_w_cb(j),
                     )
-                    dpg.add_spacer(height=4)
+                    dpg.add_drawlist(
+                        tag=f'spark_{j}',
+                        width=LEFT_W - 20,
+                        height=14,
+                    )
+                    dpg.add_spacer(height=2)
 
             dpg.add_spacer(width=6)
 
@@ -619,6 +830,23 @@ def build_main_window(W_WIN=1440, H_WIN=920):
                                 height=N*PP_CELL + 10,
                             )
 
+                    # Tab 3 — Simulation Output
+                    with dpg.tab(label="  Simulation Output  ", tag='tab_out'):
+                        dpg.add_text(
+                            "Live readiness S[j] and flow per project   |   "
+                            "Red sparkline = declining trend",
+                            color=DIM)
+                        dpg.add_spacer(height=4)
+                        with dpg.child_window(border=False,
+                                              horizontal_scrollbar=False,
+                                              height=BODY_H - 40,
+                                              tag='out_scroll'):
+                            dpg.add_drawlist(
+                                tag='dl_out',
+                                width=right_w - 30,
+                                height=M * 32 + 60,
+                            )
+
     # Edit popup
     with dpg.window(tag='edit_popup', label="Edit Parameter",
                     show=False, modal=True, no_resize=True,
@@ -644,9 +872,11 @@ def build_main_window(W_WIN=1440, H_WIN=920):
 # CONTROLS
 # ═══════════════════════════════════════════════════════════
 def _make_w_cb(j):
-    def cb(s, v):
-        with lock:
+    def cb(sender, v):
+        def _cmd():
             if eng: eng.W[j] = float(v)
+        with _cmd_lock:
+            _cmds.append(_cmd)
     return cb
 
 def _toggle_pause():
@@ -661,23 +891,31 @@ def _toggle_pause():
         dpg.configure_item('status_lbl', color=RUN_C)
 
 def _do_reset():
-    global snap
+    global snap, _events
     W_now  = [dpg.get_value(f'ws_{j}') if dpg.does_item_exist(f'ws_{j}') else 2.0
               for j in range(M)]
     g_mult = dpg.get_value('cfg_gmult') if dpg.does_item_exist('cfg_gmult') else 50.0
     was_paused = ctrl['paused']
     ctrl['paused'] = True
-    with lock:
-        init_engine_with_config(W_now, g_mult, ctrl['tps'], ctrl['dt'])
-        snap = {
-            't': 0.0, 'W': np.array(W_now),
-            'PHI': np.zeros((M,M)), 'ALPHA': np.zeros((M,M)),
-            'V': np.zeros(N),
-        }
+    # Drain any pending commands before reinit.
+    with _cmd_lock:
+        _cmds.clear()
+    init_engine_with_config(W_now, g_mult, ctrl['tps'], ctrl['dt'])
+    _events = EventQueue()
+    _spark_S[:] = 0.0
+    _spark_i[0] = 0
+    snap = Snapshot(
+        t=0.0, W=np.array(W_now, dtype=np.float32),
+        PHI=np.zeros((M,M), dtype=np.float32),
+        ALPHA=np.zeros((M,M), dtype=np.float32),
+        V=np.zeros(N, dtype=np.float32),
+        S=np.zeros(M, dtype=np.float32),
+        flow=np.zeros(M, dtype=np.float32),
+        R=np.ones(M, dtype=np.float32),
+    )
     if dpg.does_item_exist('t_txt'):
         dpg.set_value('t_txt', "t = 0")
     if not was_paused:
-        # was running — keep paused after reset, user must press Run again
         dpg.configure_item('btn_run', label=" Run  ")
         dpg.set_value('status_lbl', "[PAUSED]")
         dpg.configure_item('status_lbl', color=PAU_C)
@@ -702,16 +940,17 @@ def _update():
     _frame[0] += 1
     if not dpg.is_item_shown('main_win'): return
 
+    s = snap   # atomic capture for this frame
+
     # Sync t counter only when running
     if not ctrl['paused']:
-        dpg.set_value('t_txt', f"t = {snap['t']:.0f}")
+        dpg.set_value('t_txt', f"t = {s.t:.0f}")
 
-    # Sync W sliders from engine (in case engine modified W)
+    # Sync W sliders from snapshot (in case sim changed W via events)
     if _frame[0] % 10 == 0 and eng is not None:
-        W = snap['W']
         for j in range(M):
             if not dpg.is_item_active(f'ws_{j}'):
-                dpg.set_value(f'ws_{j}', float(W[j]))
+                dpg.set_value(f'ws_{j}', float(s.W[j]))
 
     # Sync frozen header x-scroll to body x-scroll
     if (dpg.does_item_exist('ppl_scroll') and
@@ -719,13 +958,23 @@ def _update():
         sx = dpg.get_x_scroll('ppl_scroll')
         dpg.set_x_scroll('ppl_hdr_win', sx)
 
-    # Redraw matrices
+    # Redraw PHI/ALPHA matrix
     if _frame[0] % 4 == 0:
         _draw_phi_alpha()
+
+    # Redraw people body
     if _frame[0] % 12 == 0:
-        _draw_people_body()   # body redraws every 12 frames
+        _draw_people_body()
     if _frame[0] == 3:
-        _draw_people_header() # header only needs one draw (static data)
+        _draw_people_header()   # static, one draw only
+
+    # Redraw simulation output (Tab 3)
+    if _frame[0] % 6 == 0:
+        _draw_output()
+
+    # Update sparklines in left panel (every 10 frames)
+    if _frame[0] % 10 == 0 and not ctrl['paused']:
+        _draw_sparklines()
 
     _check_phi_click()
 
