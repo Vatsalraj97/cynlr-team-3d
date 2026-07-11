@@ -689,20 +689,29 @@ def _apply_edit():
     _draw_phi_alpha()
 
 def _check_phi_click():
-    # child_window (phi_scroll) hover is reliable; drawlist hover is clipped
-    # inconsistently when the content overflows.
-    if not dpg.does_item_exist('phi_scroll'): return
-    if not dpg.is_item_hovered('phi_scroll'): return
+    # Guard: only when PHI tab is active and nothing else is modal.
+    if not dpg.does_item_exist('tabs'): return
+    if dpg.get_value('tabs') != 'tab_phi': return
     if not dpg.is_mouse_button_clicked(0): return
-    # dl_phi does have rect_min and DearPyGui tracks its actual screen position
-    # accounting for the parent scroll — so lx/ly are drawlist-local coordinates.
     if not dpg.does_item_exist('dl_phi'): return
-    rect   = dpg.get_item_rect_min('dl_phi')
+
+    # rect_min of the drawlist gives its origin in screen (viewport) coordinates.
+    # DearPyGui updates this every rendered frame — it reflects the current scroll
+    # offset, so subtracting it from the mouse position yields drawlist-local coords.
     mx, my = dpg.get_mouse_pos()
+    rect   = dpg.get_item_rect_min('dl_phi')
     lx = mx - rect[0]
     ly = my - rect[1]
-    k  = int((lx - PM_LHDR) / PM_CELL)
-    j  = int((ly - PM_THDR) / PM_CELL)
+
+    # Bounds check: reject clicks outside the cell grid area entirely.
+    TW = PM_LHDR + M * PM_CELL
+    TH = PM_THDR + M * PM_CELL
+    if lx < PM_LHDR or ly < PM_THDR or lx > TW or ly > TH:
+        return
+
+    k = int((lx - PM_LHDR) / PM_CELL)
+    j = int((ly - PM_THDR) / PM_CELL)
+
     if 0 <= j < M and 0 <= k < M and j != k:
         s = snap
         if j < k:
