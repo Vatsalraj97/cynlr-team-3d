@@ -171,9 +171,30 @@ class SimGraphAdapter:
 
     def tick(self, dt: float = 1.0) -> dict:
         self._push_params()
-        snap = self._sim.tick(dt)
-        self._pull_results()
-        return snap
+        self._sim.tick(dt)      # advance SimGraph — its return format differs from DRVEngine
+        self._pull_results()    # pulls _C[n,m], A[m], t back into numpy
+
+        # Build DRVEngine-compatible dict so sim_loop can read state['S'] etc.
+        flow = self._C.sum(axis=0).astype(np.float32)
+        V    = self._C.sum(axis=1).astype(np.float32)
+        S    = np.array([
+            self._sim.nodes[k].state.get("S", 0.0)
+            for k in self._proj_keys
+        ], dtype=np.float32)
+        R    = np.array([
+            self._sim.nodes[k].state.get("R", 1.0)
+            for k in self._proj_keys
+        ], dtype=np.float32)
+        return {
+            "C":    self._C.copy().astype(np.float32),
+            "flow": flow,
+            "R":    R,
+            "B":    self.boost().astype(np.float32),
+            "A":    self.A.astype(np.float32),
+            "V":    V,
+            "S":    S,
+            "t":    self.t,
+        }
 
     def contribution(self) -> np.ndarray:
         """Return C[n,m] from last tick."""

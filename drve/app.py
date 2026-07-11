@@ -77,6 +77,8 @@ ALP_HI   = ( 34,197, 94, 255)   # max ALPHA cell colour (green)
 RUN_C    = ( 34,197, 94, 255)   # running indicator
 PAU_C    = (239, 68, 68, 255)   # paused indicator
 ACCENT   = ( 99,102,241, 255)   # buttons / sliders
+HOV_C    = (255,255,255, 220)   # hover border colour
+HOV_FILL = (255,255,255,  18)   # hover cell fill tint
 
 # ═══════════════════════════════════════════════════════════
 # ENGINE STATE
@@ -109,6 +111,8 @@ _events: EventQueue | None = None
 SPARK_LEN = 60
 _spark_S  = np.zeros((M, SPARK_LEN), dtype=np.float32)
 _spark_i  = [0]   # write index (wraps)
+_hov:     tuple = (-1, -1)   # (j, k) of PHI/ALPHA cell under the mouse
+_hov_ppl: tuple = (-1, -1)  # (i, k) of people matrix cell under the mouse
 
 def init_engine_with_config(W_init, g_mult, tps, dt):
     global eng
@@ -328,6 +332,51 @@ def do_launch():
 
 
 # ═══════════════════════════════════════════════════════════
+# HOVER DETECTION — single source of truth for (j, k)
+# ═══════════════════════════════════════════════════════════
+def _compute_hov_cell() -> tuple:
+    """Return (j, k) of the PHI/ALPHA cell under the mouse, or (-1,-1)."""
+    if not dpg.does_item_exist('dl_phi'): return (-1, -1)
+    if not dpg.does_item_exist('tabs'):   return (-1, -1)
+    if dpg.get_value('tabs') != 'tab_phi': return (-1, -1)
+    mx, my = dpg.get_mouse_pos()
+    rect   = dpg.get_item_rect_min('dl_phi')
+    sx     = dpg.get_x_scroll('phi_scroll')
+    sy     = dpg.get_y_scroll('phi_scroll')
+    lx = (mx - rect[0]) + sx
+    ly = (my - rect[1]) + sy
+    TW = PM_LHDR + M * PM_CELL
+    TH = PM_THDR + M * PM_CELL
+    if lx < PM_LHDR or ly < PM_THDR or lx > TW or ly > TH:
+        return (-1, -1)
+    k = int((lx - PM_LHDR) / PM_CELL)
+    j = int((ly - PM_THDR) / PM_CELL)
+    if 0 <= j < M and 0 <= k < M:
+        return (j, k)
+    return (-1, -1)
+
+
+def _compute_hov_ppl() -> tuple:
+    """Return (i, k) of the people matrix cell under the mouse, or (-1,-1)."""
+    if not dpg.does_item_exist('dl_ppl'): return (-1, -1)
+    if not dpg.does_item_exist('tabs'):   return (-1, -1)
+    if dpg.get_value('tabs') != 'tab_ppl': return (-1, -1)
+    mx, my = dpg.get_mouse_pos()
+    rect   = dpg.get_item_rect_min('dl_ppl')
+    sx     = dpg.get_x_scroll('ppl_scroll')
+    sy     = dpg.get_y_scroll('ppl_scroll')
+    lx = (mx - rect[0]) + sx
+    ly = (my - rect[1]) + sy
+    if lx < PP_LHDR or lx > PP_LHDR + M * PP_CELL: return (-1, -1)
+    if ly < 0 or ly > N * PP_CELL:                  return (-1, -1)
+    k = int((lx - PP_LHDR) / PP_CELL)
+    i = int(ly / PP_CELL)
+    if 0 <= i < N and 0 <= k < M:
+        return (i, k)
+    return (-1, -1)
+
+
+# ═══════════════════════════════════════════════════════════
 # DRAW — PHI / ALPHA MATRIX
 # ═══════════════════════════════════════════════════════════
 def _draw_phi_alpha():
@@ -401,6 +450,26 @@ def _draw_phi_alpha():
                 if v > 0.01:
                     dpg.draw_text([x1+3, vy], f"{v:.2f}",
                                   color=(190,255,210,255), size=VAL_SZ, parent=dl)
+
+    # ── Hover highlight — drawn on top of all cells ──────────
+    hj, hk = _hov
+    if hj >= 0 and hk >= 0 and hj != hk:
+        hx1 = PM_LHDR + hk * PM_CELL
+        hy1 = PM_THDR + hj * PM_CELL
+        hx2 = hx1 + PM_CELL
+        hy2 = hy1 + PM_CELL
+        # Tint fill
+        dpg.draw_rectangle([hx1, hy1], [hx2, hy2],
+                           fill=HOV_FILL, color=(0,0,0,0), parent=dl)
+        # Bright 2 px border
+        dpg.draw_rectangle([hx1+1, hy1+1], [hx2-1, hy2-1],
+                           fill=(0,0,0,0), color=HOV_C, thickness=2, parent=dl)
+        # Relation label below the highlight
+        lbl = 'PHI' if hj < hk else 'ALPHA'
+        col = (190,192,255,230) if hj < hk else (150,255,180,230)
+        dpg.draw_text([hx1, hy2 + 3],
+                      f"{lbl}  {SHORT[hj][:6]} ← {SHORT[hk][:6]}",
+                      color=col, size=9, parent=dl)
 
     # ── Legend below matrix ───────────────────────────────────
     ly = TH + 10
@@ -494,6 +563,26 @@ def _draw_people_body():
                 dpg.draw_text([x1+3, y1 + PP_CELL//2 - 6],
                               str(pct), color=(255,255,255,230),
                               size=PP_VAL, parent=dl)
+
+    # ── Hover highlight — drawn on top of all cells ──────────
+    hi, hk = _hov_ppl
+    if hi >= 0 and hk >= 0:
+        hx1 = PP_LHDR + hk * PP_CELL
+        hy1 = hi * PP_CELL
+        hx2 = hx1 + PP_CELL
+        hy2 = hy1 + PP_CELL
+        dpg.draw_rectangle([hx1, hy1], [hx2, hy2],
+                           fill=HOV_FILL, color=(0,0,0,0), parent=dl)
+        dpg.draw_rectangle([hx1+1, hy1+1], [hx2-1, hy2-1],
+                           fill=(0,0,0,0), color=HOV_C, thickness=2, parent=dl)
+        # Label: person → project (alloc %)
+        pname    = PEOPLE[hi]['name'].split()[0][:10]
+        proj_key = PROJECTS[hk][0]
+        pct      = PEOPLE[hi]['allocs'].get(proj_key, 0)
+        col      = CAT_C.get(CAT[hk], LCOL)
+        dpg.draw_text([hx1, hy2 + 2],
+                      f"{pname} → {SHORT[hk][:8]}  {pct}%",
+                      color=col, size=9, parent=dl)
 
 
 def _draw_people():
@@ -646,7 +735,8 @@ def _draw_sparklines():
 # ═══════════════════════════════════════════════════════════
 # CELL EDITOR POPUP
 # ═══════════════════════════════════════════════════════════
-_edit = {'type': None, 'j': 0, 'k': 0}
+_edit     = {'type': None, 'j': 0, 'k': 0}
+_ppl_edit = {'i': 0, 'k': 0}
 
 def _show_edit(etype, j, k, cur):
     _edit.update({'type': etype, 'j': j, 'k': k})
@@ -689,35 +779,72 @@ def _apply_edit():
     _draw_phi_alpha()
 
 def _check_phi_click():
-    # Guard: only when PHI tab is active and nothing else is modal.
-    if not dpg.does_item_exist('tabs'): return
-    if dpg.get_value('tabs') != 'tab_phi': return
+    # _hov is already the scroll-corrected (j, k) under the mouse, computed
+    # every frame by _compute_hov_cell(). A click just confirms it — no
+    # coordinate math needed here.
     if not dpg.is_mouse_button_clicked(0): return
-    if not dpg.does_item_exist('dl_phi'): return
+    j, k = _hov
+    if j < 0 or k < 0 or j == k: return
+    s = snap
+    if j < k:
+        _show_edit('phi',   j, k, s.PHI[j, k])
+    else:
+        _show_edit('alpha', j, k, s.ALPHA[j, k])
 
-    # rect_min of the drawlist gives its origin in screen (viewport) coordinates.
-    # DearPyGui updates this every rendered frame — it reflects the current scroll
-    # offset, so subtracting it from the mouse position yields drawlist-local coords.
-    mx, my = dpg.get_mouse_pos()
-    rect   = dpg.get_item_rect_min('dl_phi')
-    lx = mx - rect[0]
-    ly = my - rect[1]
 
-    # Bounds check: reject clicks outside the cell grid area entirely.
-    TW = PM_LHDR + M * PM_CELL
-    TH = PM_THDR + M * PM_CELL
-    if lx < PM_LHDR or ly < PM_THDR or lx > TW or ly > TH:
-        return
+# ─── People matrix: edit allocation % ───────────────────────
+def _show_ppl_edit(i, k, cur_pct):
+    _ppl_edit.update({'i': i, 'k': k})
+    proj_key = PROJECTS[k][0]
+    pname    = PEOPLE[i]['name']
+    dpg.set_value('ppl_edit_title',
+                  f"{pname}  →  {SHORT[k]}  ({proj_key})   0 – 100 %")
+    dpg.set_value('ppl_edit_val', int(cur_pct))
+    dpg.configure_item('ppl_edit_popup', show=True)
 
-    k = int((lx - PM_LHDR) / PM_CELL)
-    j = int((ly - PM_THDR) / PM_CELL)
+def _apply_ppl_edit():
+    i, k     = _ppl_edit['i'], _ppl_edit['k']
+    proj_key = PROJECTS[k][0]
+    v        = int(np.clip(dpg.get_value('ppl_edit_val'), 0, 100))
+    PEOPLE[i]['allocs'][proj_key] = v
+    dpg.configure_item('ppl_edit_popup', show=False)
+    _draw_people_body()
 
-    if 0 <= j < M and 0 <= k < M and j != k:
-        s = snap
-        if j < k:
-            _show_edit('phi',   j, k, s.PHI[j,k])
-        else:
-            _show_edit('alpha', j, k, s.ALPHA[j,k])
+def _check_ppl_click():
+    if not dpg.is_mouse_button_clicked(0): return
+    i, k = _hov_ppl
+    if i < 0 or k < 0: return
+    proj_key = PROJECTS[k][0]
+    cur      = PEOPLE[i]['allocs'].get(proj_key, 0)
+    _show_ppl_edit(i, k, cur)
+
+# ─── Sync team allocations → W[j] in the simulation ─────────
+def _sync_team_to_sim():
+    """Convert PEOPLE alloc% to FTE weights and push into the engine."""
+    global snap
+    new_W = np.zeros(M, dtype=np.float32)
+    for k in range(M):
+        proj_key = PROJECTS[k][0]
+        total_pct = sum(p['allocs'].get(proj_key, 0) for p in PEOPLE)
+        new_W[k]  = max(total_pct / 100.0, 0.1)   # FTEs; floor at 0.1
+
+    def _cmd():
+        if eng is not None:
+            for j in range(M):
+                eng.W[j] = float(new_W[j])
+    if ctrl['paused']:
+        _cmd()
+        s    = snap
+        snap = Snapshot(t=s.t, W=new_W, PHI=s.PHI, ALPHA=s.ALPHA,
+                        V=s.V, S=s.S, flow=s.flow, R=s.R)
+    else:
+        with _cmd_lock:
+            _cmds.append(_cmd)
+
+    # Sync W sliders to reflect new values
+    for j in range(M):
+        if dpg.does_item_exist(f'ws_{j}'):
+            dpg.set_value(f'ws_{j}', float(new_W[j]))
 
 
 # ═══════════════════════════════════════════════════════════
@@ -749,6 +876,9 @@ def build_main_window(W_WIN=1440, H_WIN=920):
             dpg.add_button(label=" Reset ", callback=_do_reset)
             dpg.add_spacer(width=6)
             dpg.add_button(label=" Config ", callback=_go_config)
+            dpg.add_spacer(width=20)
+            dpg.add_button(label=" Sync Team → Sim ", callback=_sync_team_to_sim,
+                           tag='btn_sync')
             dpg.add_spacer(width=20)
             dpg.add_text("[PAUSED]", tag='status_lbl', color=PAU_C)
 
@@ -863,7 +993,7 @@ def build_main_window(W_WIN=1440, H_WIN=920):
                                 height=M * 32 + 60,
                             )
 
-    # Edit popup
+    # PHI / ALPHA edit popup
     with dpg.window(tag='edit_popup', label="Edit Parameter",
                     show=False, modal=True, no_resize=True,
                     width=400, height=140, pos=[520, 400]):
@@ -882,6 +1012,28 @@ def build_main_window(W_WIN=1440, H_WIN=920):
             dpg.add_spacer(width=8)
             dpg.add_button(label="  Cancel  ", width=90,
                            callback=lambda: dpg.configure_item('edit_popup', show=False))
+
+    # Team allocation edit popup
+    with dpg.window(tag='ppl_edit_popup', label="Edit Allocation",
+                    show=False, modal=True, no_resize=True,
+                    width=440, height=140, pos=[500, 420]):
+        dpg.add_text("", tag='ppl_edit_title', color=LCOL)
+        dpg.add_spacer(height=8)
+        dpg.add_input_int(tag='ppl_edit_val', label="% allocation",
+                          default_value=0,
+                          min_value=0, max_value=100,
+                          step=5, width=120)
+        dpg.add_spacer(height=10)
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="  Apply  ", width=90, callback=_apply_ppl_edit)
+            dpg.add_spacer(width=8)
+            dpg.add_button(label=" Set to 0 ", width=90,
+                           callback=lambda: (dpg.set_value('ppl_edit_val', 0),
+                                             _apply_ppl_edit()))
+            dpg.add_spacer(width=8)
+            dpg.add_button(label="  Cancel  ", width=90,
+                           callback=lambda: dpg.configure_item('ppl_edit_popup',
+                                                               show=False))
 
 
 # ═══════════════════════════════════════════════════════════
@@ -974,12 +1126,20 @@ def _update():
         sx = dpg.get_x_scroll('ppl_scroll')
         dpg.set_x_scroll('ppl_hdr_win', sx)
 
-    # Redraw PHI/ALPHA matrix
-    if _frame[0] % 4 == 0:
+    # Track hover every frame; redraw immediately when hovered cell changes
+    global _hov, _hov_ppl
+    new_hov = _compute_hov_cell()
+    if new_hov != _hov:
+        _hov = new_hov
+        _draw_phi_alpha()
+    elif _frame[0] % 4 == 0:
         _draw_phi_alpha()
 
-    # Redraw people body
-    if _frame[0] % 12 == 0:
+    new_hov_ppl = _compute_hov_ppl()
+    if new_hov_ppl != _hov_ppl:
+        _hov_ppl = new_hov_ppl
+        _draw_people_body()
+    elif _frame[0] % 12 == 0:
         _draw_people_body()
     if _frame[0] == 3:
         _draw_people_header()   # static, one draw only
@@ -993,6 +1153,7 @@ def _update():
         _draw_sparklines()
 
     _check_phi_click()
+    _check_ppl_click()
 
 
 # ═══════════════════════════════════════════════════════════
