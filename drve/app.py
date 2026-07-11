@@ -652,6 +652,8 @@ def _show_edit(etype, j, k, cur):
     _edit.update({'type': etype, 'j': j, 'k': k})
     lbl  = 'PHI' if etype == 'phi' else 'ALPHA'
     rng  = '0.0 - 1.0' if etype == 'phi' else '0.0 - 2.0'
+    mx   = 1.0 if etype == 'phi' else 2.0
+    dpg.configure_item('edit_val', max_value=mx)
     dpg.set_value('edit_title',
                   f"{lbl}  [{SHORT[j]}  <--  {SHORT[k]}]   range {rng}")
     dpg.set_value('edit_val', round(float(cur), 3))
@@ -687,10 +689,15 @@ def _apply_edit():
     _draw_phi_alpha()
 
 def _check_phi_click():
-    if not dpg.does_item_exist('dl_phi'): return
-    if not dpg.is_item_hovered('dl_phi'): return
+    # child_window (phi_scroll) hover is reliable; drawlist hover is clipped
+    # inconsistently when the content overflows.
+    if not dpg.does_item_exist('phi_scroll'): return
+    if not dpg.is_item_hovered('phi_scroll'): return
     if not dpg.is_mouse_button_clicked(0): return
-    rect = dpg.get_item_rect_min('dl_phi')
+    # dl_phi does have rect_min and DearPyGui tracks its actual screen position
+    # accounting for the parent scroll — so lx/ly are drawlist-local coordinates.
+    if not dpg.does_item_exist('dl_phi'): return
+    rect   = dpg.get_item_rect_min('dl_phi')
     mx, my = dpg.get_mouse_pos()
     lx = mx - rect[0]
     ly = my - rect[1]
